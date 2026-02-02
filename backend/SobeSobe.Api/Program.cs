@@ -866,4 +866,131 @@ app.MapPost("/api/games/{id:guid}/rounds/current/trump", async (Guid id, SelectT
 .RequireAuthorization()
 .WithName("SelectTrump");
 
+// Player Decision endpoint (requires authentication, PlayerDecisions phase)
+app.MapPost("/api/games/{id:guid}/rounds/current/play-decision", async (Guid id, PlayDecisionRequest request, HttpContext httpContext, ApplicationDbContext db) =>
+{
+    // Get user ID from JWT claims
+    var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+    if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    // Find game with current round and player sessions
+    var game = await db.Games
+        .Include(g => g.Rounds.OrderByDescending(r => r.RoundNumber).Take(1))
+        .Include(g => g.PlayerSessions)
+        .FirstOrDefaultAsync(g => g.Id == id);
+
+    if (game == null)
+    {
+        return Results.NotFound(new { error = "Game not found" });
+    }
+
+    // Get current round
+    var currentRound = game.Rounds.FirstOrDefault();
+    if (currentRound == null)
+    {
+        return Results.BadRequest(new { error = "No active round found" });
+    }
+
+    // Check if round is in PlayerDecisions phase
+    if (currentRound.Status != RoundStatus.PlayerDecisions)
+    {
+        return Results.StatusCode(409); // Conflict - wrong phase
+    }
+
+    // Find player session for current user
+    var playerSession = game.PlayerSessions.FirstOrDefault(ps => ps.UserId == userId);
+    if (playerSession == null)
+    {
+        return Results.NotFound(new { error = "Player not in this game" });
+    }
+
+    // Validate decision rules
+    // Rule 1: Party player must always play
+    if (currentRound.PartyPlayerUserId == userId && !request.WillPlay)
+    {
+        return Results.BadRequest(new { error = "Party player cannot opt out" });
+    }
+
+    // Rule 2: Dealer must always play
+    if (currentRound.DealerUserId == userId && !request.WillPlay)
+    {
+        return Results.BadRequest(new { error = "Dealer cannot opt out" });
+    }
+
+    // Rule 3: If trump is Clubs, all players must play
+    if (currentRound.TrumpSuit == TrumpSuit.Clubs && !request.WillPlay)
+    {
+        return Results.BadRequest(new { error = "Clubs trump forces all players to play" });
+    }
+
+    // Rule 4: Cannot sit out more than 2 consecutive rounds
+    if (!request.WillPlay && playerSession.ConsecutiveRoundsOut >= 2)
+    {
+        return Results.BadRequest(new { error = "Cannot sit out more than 2 consecutive rounds" });
+    }
+
+    // Rule 5: Players with 5 points or less must play (from game rules)
+    if (!request.WillPlay && playerSession.CurrentPoints <= 5)
+    {
+        return Results.BadRequest(new { error = "Players with 5 points or less must play" });
+    }
+
+    // Update consecutive rounds out counter
+    if (!request.WillPlay)
+    {
+        playerSession.ConsecutiveRoundsOut++;
+    }
+    else
+    {
+        // Reset counter if player decides to play
+        playerSession.ConsecutiveRoundsOut = 0;
+    }
+
+    // Create or update Hand to track who's playing
+    var existingHand = await db.Hands
+        .FirstOrDefaultAsync(h => h.RoundId == currentRound.Id && h.PlayerSessionId == playerSession.Id);
+
+    if (request.WillPlay)
+    {
+        if (existingHand == null)
+        {
+            // Create hand for player (cards will be dealt later)
+            var hand = new Hand
+            {
+                RoundId = currentRound.Id,
+                PlayerSessionId = playerSession.Id,
+                CardsJson = "[]", // Empty for now, will be populated during dealing
+                InitialCardsJson = "[]"
+            };
+            db.Hands.Add(hand);
+        }
+    }
+    else
+    {
+        // Player opts out - remove hand if it exists
+        if (existingHand != null)
+        {
+            db.Hands.Remove(existingHand);
+        }
+    }
+
+    await db.SaveChangesAsync();
+
+    // Return response
+    var response = new PlayDecisionResponse
+    {
+        RoundId = currentRound.Id,
+        PlayerSessionId = playerSession.Id,
+        WillPlay = request.WillPlay,
+        ConsecutiveRoundsOut = playerSession.ConsecutiveRoundsOut
+    };
+
+    return Results.Ok(response);
+})
+.RequireAuthorization()
+.WithName("PlayDecision");
+
 app.Run();

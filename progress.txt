@@ -1,3 +1,49 @@
+## 2026-02-02 - Issue #1: Backend Development - Player Decision Endpoint Implementation
+
+### What was implemented
+- Implemented POST /api/games/{id}/rounds/current/play-decision endpoint for opt-in/opt-out decisions
+- Created PlayDecisionRequest and PlayDecisionResponse DTOs
+- Endpoint requires authentication (.RequireAuthorization())
+- Validates player is in the game and round is in PlayerDecisions phase
+- Implements all game rule validations:
+  - Party player must always play (cannot opt out)
+  - Dealer must always play (cannot opt out)
+  - Clubs trump forces all players to play
+  - Cannot sit out more than 2 consecutive rounds
+  - Players with 5 points or less must play
+- Tracks consecutive rounds out counter:
+  - Increments when player opts out
+  - Resets to 0 when player opts in
+- Creates Hand entity for players who opt in (cards dealt later)
+- Removes Hand entity for players who opt out
+- Returns decision result with roundId, playerSessionId, willPlay, consecutiveRoundsOut
+- Error handling: 401 Unauthorized, 404 Not Found, 400 Bad Request (validation failures), 409 Conflict (wrong phase)
+
+### Files changed
+- Created: backend/SobeSobe.Api/DTOs/PlayDecisionRequest.cs (willPlay boolean)
+- Created: backend/SobeSobe.Api/DTOs/PlayDecisionResponse.cs (decision result with consecutive rounds out)
+- Modified: backend/SobeSobe.Api/Program.cs (added POST /api/games/{id}/rounds/current/play-decision endpoint after trump selection)
+
+### Learnings
+- Player decisions tracked via Hand entities (presence = playing, absence = sitting out)
+- ConsecutiveRoundsOut property in PlayerSession enforces max 2 consecutive sit-outs
+- Party player and dealer have automatic opt-in (validated server-side)
+- Clubs trump is special forcing rule that requires all players to participate
+- Low points threshold (≤5 points) forces players to play
+- Hand creation happens during decision phase with empty cards array (populated during dealing)
+- Phase validation ensures decisions only made during PlayerDecisions phase
+- Testing workflow: register (3 users) → login → create game → join → start → select trump → make decisions
+- Tested edge cases: party player opt-out (400), dealer opt-out (400), Clubs trump opt-out (400), valid opt-in/opt-out
+- Counter increments only on opt-out, resets on opt-in for flexible player strategies
+
+### Next steps
+- Implement card dealing logic (deal 2 cards initially after trump, 3 more after decisions)
+- Implement card exchange endpoint (POST /api/games/{id}/rounds/current/exchange-cards) - 0-3 cards
+- Implement play card endpoint (POST /api/games/{id}/rounds/current/play-card) - trick-taking mechanics
+- Implement get game state endpoint (GET /api/games/{id}/state) - full game state for UI
+- Implement score history endpoint (GET /api/games/{id}/scores)
+- Add real-time notifications for game events (gRPC/SignalR)
+
 ## 2026-02-02 - Issue #1: Backend Development - Trump Selection Endpoint Implementation
 
 ### What was implemented
