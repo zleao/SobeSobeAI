@@ -73,3 +73,39 @@
 - Issue #12: Write comprehensive game rules documentation
 - Issue #11: Define REST API and gRPC contracts
 - Future: Integrate Angular frontend with AppHost using Aspire.Hosting.NodeJs
+
+## 2026-02-02 - Issue #12: Write comprehensive game rules documentation
+
+### What was implemented
+- Created comprehensive game rules documentation in docs/game-rules.md with 750+ lines of detailed content
+- Documented complete game setup: deck composition, card ranking, initial state
+- Documented round phase: dealer selection, party player role, trump selection (before/after dealing), player decisions, card exchange
+- Documented trick-taking phase: follow suit rules, trump escalation, mandatory Ace of trump rule, winning conditions
+- Documented scoring phase: point reduction for tricks won, penalties for zero tricks, party player double penalties
+- Added glossary of Portuguese terms (Manilha, Copas às escuras, Cortar, etc.)
+- Created detailed game state transition diagram showing flow from game start to end
+- Provided 3-player example game with 5 complete rounds demonstrating all mechanics
+- Documented 10 edge cases and special scenarios with resolutions
+- Defined comprehensive validation rules for trump selection, player decisions, card exchange, trick-taking, and scoring
+- Added UI/UX requirements for score table visualization
+- Included detailed examples and tables for trick values, penalties, and scoring calculations
+
+### Files changed
+- Modified: docs/game-rules.md (replaced placeholder with 750+ lines of comprehensive documentation)
+
+### Learnings
+- The game has significant strategic depth from trump selection timing, opt-in/opt-out mechanics, and card exchange
+- Party player role carries both privilege (choosing trump) and risk (double penalties)
+- Mandatory Ace of trump rule adds interesting tactical constraint
+- Trump escalation rule (must play higher trump when trump is led) creates forced play scenarios
+- Consecutive sit-out tracking (max 2 rounds) prevents passive play
+- Clubs trump forces all players to play, creating high-participation rounds
+- Prize calculation (€0.05 per remaining point) provides clear monetary incentive
+- Score table UI should use visual indicators (bold for dealer, underline for party player, colors for point changes)
+- Edge cases around trump Ace + following suit need clear documentation
+- Negative points are valid and common near game end
+
+### Next steps
+- Issue #16: Design database schema and domain models (now have complete rules to inform entity design)
+- Issue #11: Define REST API and gRPC contracts (rules documentation will guide endpoint design)
+- Issue #15: Create UI/UX wireframes and mockups (rules documentation includes score table requirements)
