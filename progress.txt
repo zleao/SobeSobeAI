@@ -1,3 +1,45 @@
+## 2026-02-02 - Issue #1: Backend Development - User Login with JWT Authentication
+
+### What was implemented
+- Implemented POST /api/auth/login endpoint with JWT token generation
+- Created JwtTokenService for generating access tokens (15-min expiry) and refresh tokens
+- Created LoginRequest and LoginResponse DTOs
+- Configured JWT Bearer authentication in Program.cs with token validation
+- Added JWT configuration to appsettings.json (secret, issuer, audience)
+- Login endpoint accepts username OR email, verifies password, updates LastLoginAt timestamp
+- Returns 200 OK with access token, refresh token, token type, expiry, and user data on success
+- Returns 400 Bad Request on invalid credentials
+- Tested successfully: login with username, login with email, invalid password handling
+
+### Files changed
+- Created: backend/SobeSobe.Api/Services/JwtTokenService.cs (JWT token generation using HS256, 15-min access token, secure refresh token)
+- Created: backend/SobeSobe.Api/DTOs/LoginRequest.cs (username or email + password)
+- Created: backend/SobeSobe.Api/DTOs/LoginResponse.cs (access token, refresh token, token type, expiry, user data)
+- Modified: backend/SobeSobe.Api/SobeSobe.Api.csproj (added Microsoft.AspNetCore.Authentication.JwtBearer 10.0.2, System.IdentityModel.Tokens.Jwt 8.4.0)
+- Modified: backend/SobeSobe.Api/appsettings.json (added JWT configuration: Secret, Issuer, Audience)
+- Modified: backend/SobeSobe.Api/Program.cs (configured JWT authentication, added login endpoint)
+
+### Learnings
+- JwtSecurityTokenHandler.WriteToken() generates compact JWT token string
+- SymmetricSecurityKey with HS256 algorithm for signing tokens (secret must be at least 32 bytes)
+- JWT claims use JwtRegisteredClaimNames (Sub for user ID, UniqueName for username, Email, Jti for token ID)
+- Access tokens short-lived (15 min), refresh tokens long-lived (simplified implementation, production should store in DB)
+- Refresh token generated using RandomNumberGenerator.GetBytes() for crypto-secure randomness
+- Login endpoint updates LastLoginAt timestamp for user activity tracking
+- FirstOrDefaultAsync with OR condition searches username OR email in single query
+- Authentication middleware must be called before Authorization: UseAuthentication() then UseAuthorization()
+- JWT configuration in appsettings.json: Secret (min 32 chars), Issuer (API identifier), Audience (client identifier)
+- Build succeeded, all tests pass, login endpoint tested successfully with username and email
+
+### Next steps
+- Implement token refresh endpoint (POST /api/auth/refresh)
+- Implement logout endpoint (POST /api/auth/logout) with token revocation
+- Implement get current user endpoint (GET /api/auth/user) with [Authorize] attribute
+- Store refresh tokens in database for security and revocation
+- Add claims-based authorization for protected endpoints
+- Implement remaining user management endpoints (get profile, update profile, statistics)
+- Start implementing game management endpoints (create game, join game, list games)
+
 ## 2026-02-02 - Issue #13: Initialize monorepo project structure
 
 ### What was implemented
