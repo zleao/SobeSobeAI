@@ -1,3 +1,38 @@
+## 2026-02-02 - Issue #1: Backend Development - Create Game Endpoint Implementation
+
+### What was implemented
+- Implemented POST /api/games endpoint for creating new games
+- Created CreateGameRequest DTO (validates maxPlayers 2-5)
+- Created GameResponse and PlayerSessionResponse DTOs
+- Endpoint requires authentication (.RequireAuthorization())
+- Creates Game entity with Waiting status and creator as first player
+- Automatically creates PlayerSession for game creator at position 0 with 20 starting points
+- Returns comprehensive GameResponse with game details and player list
+- Tested successfully: register → login → create game workflow
+
+### Files changed
+- Created: backend/SobeSobe.Api/DTOs/CreateGameRequest.cs (maxPlayers validation)
+- Created: backend/SobeSobe.Api/DTOs/GameResponse.cs (game and player session response DTOs)
+- Modified: backend/SobeSobe.Api/Program.cs (added create game endpoint, imported SobeSobe.Core.Enums)
+
+### Learnings
+- Game entity uses CreatedByUserId property (not CreatedBy as initially attempted)
+- Game entity uses CurrentDealerPosition property (not CurrentDealerIndex)
+- GameStatus enum value 0 = Waiting (enum serialized as integer in JSON)
+- Game creator automatically joins as first player at position 0
+- PlayerSession tracks currentPoints (starts at 20), isActive, and consecutiveRoundsOut
+- Response includes full player details with username, displayName, and avatarUrl from User entity
+- JWT authentication extracts userId from "sub" claim and verifies user exists before creating game
+- Returns 201 Created with Location header pointing to /api/games/{id}
+- Comprehensive error handling: 401 if not authenticated, 404 if user not found
+
+### Next steps
+- Implement join game endpoint (POST /api/games/{id}/join)
+- Implement list games endpoint (GET /api/games)
+- Implement get game details endpoint (GET /api/games/{id})
+- Implement start game endpoint (POST /api/games/{id}/start)
+- Implement game state machine for round and trick management
+
 ## 2026-02-02 - Issue #1: Backend Development - Get Current User Endpoint Implementation
 
 ### What was implemented

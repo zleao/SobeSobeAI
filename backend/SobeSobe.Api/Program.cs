@@ -6,6 +6,7 @@ using SobeSobe.Infrastructure.Data;
 using SobeSobe.Api.DTOs;
 using SobeSobe.Api.Services;
 using SobeSobe.Core.Entities;
+using SobeSobe.Core.Enums;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -242,6 +243,89 @@ app.MapPost("/api/users/register", async (RegisterUserRequest request, Applicati
     return Results.Created($"/api/users/{user.Id}", userResponse);
 })
 .WithName("RegisterUser")
+.WithOpenApi();
+
+// Create Game endpoint (requires authentication)
+app.MapPost("/api/games", async (CreateGameRequest request, HttpContext httpContext, ApplicationDbContext db) =>
+{
+    // Get user ID from JWT claims
+    var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+    if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    // Verify user exists
+    var user = await db.Users.FindAsync(userId);
+    if (user == null)
+    {
+        return Results.NotFound(new { error = "User not found" });
+    }
+
+    // Create game
+    var game = new Game
+    {
+        CreatedByUserId = userId,
+        Status = GameStatus.Waiting,
+        MaxPlayers = request.MaxPlayers,
+        CurrentRoundNumber = 0,
+        CreatedAt = DateTime.UtcNow
+    };
+
+    db.Games.Add(game);
+
+    // Create player session for game creator (position 0)
+    var playerSession = new PlayerSession
+    {
+        GameId = game.Id,
+        UserId = userId,
+        Position = 0,
+        CurrentPoints = 20, // Starting points
+        IsActive = true,
+        ConsecutiveRoundsOut = 0,
+        JoinedAt = DateTime.UtcNow
+    };
+
+    db.PlayerSessions.Add(playerSession);
+
+    await db.SaveChangesAsync();
+
+    // Return game response
+    var gameResponse = new GameResponse
+    {
+        Id = game.Id,
+        CreatedBy = game.CreatedByUserId,
+        CreatedByUsername = user.Username,
+        Status = game.Status,
+        MaxPlayers = game.MaxPlayers,
+        CurrentPlayerCount = 1,
+        CurrentDealerIndex = game.CurrentDealerPosition,
+        CurrentRoundNumber = game.CurrentRoundNumber,
+        CreatedAt = game.CreatedAt,
+        StartedAt = game.StartedAt,
+        CompletedAt = game.CompletedAt,
+        Players = new List<PlayerSessionResponse>
+        {
+            new PlayerSessionResponse
+            {
+                Id = playerSession.Id,
+                UserId = user.Id,
+                Username = user.Username,
+                DisplayName = user.DisplayName,
+                AvatarUrl = user.AvatarUrl,
+                Position = playerSession.Position,
+                CurrentPoints = playerSession.CurrentPoints,
+                IsActive = playerSession.IsActive,
+                ConsecutiveRoundsOut = playerSession.ConsecutiveRoundsOut,
+                JoinedAt = playerSession.JoinedAt
+            }
+        }
+    };
+
+    return Results.Created($"/api/games/{game.Id}", gameResponse);
+})
+.RequireAuthorization()
+.WithName("CreateGame")
 .WithOpenApi();
 
 app.Run();
