@@ -1,3 +1,47 @@
+## 2026-02-02 - Issue #1: Backend Development - Card Exchange Implementation
+
+### What was implemented
+- Implemented POST /api/games/{id}/rounds/current/exchange-cards endpoint for card exchange phase
+- Created ExchangeCardsRequest and ExchangeCardsResponse DTOs
+- Endpoint requires authentication (.RequireAuthorization())
+- Players can exchange 0-3 cards from their hand
+- Validates all exchange rules from game rules documentation:
+  - Cannot exchange more than 3 cards (400 Bad Request)
+  - Cannot exchange Ace of trump (400 Bad Request with specific message)
+  - Cannot exchange cards not in player's hand (400 Bad Request)
+  - Must be in CardExchange phase (409 Conflict if wrong phase)
+- Exchange mechanism:
+  - Removes specified cards from player's hand
+  - Creates new deck excluding all cards currently in play (all players' hands)
+  - Shuffles remaining deck and draws replacement cards
+  - Updates Hand entity with new cards JSON
+- Returns full updated hand after exchange
+- Error handling: 401 Unauthorized, 404 Not Found (game/round/player/hand), 400 Bad Request (validation), 409 Conflict (wrong phase)
+
+### Files changed
+- Created: backend/SobeSobe.Api/DTOs/ExchangeCardsRequest.cs (list of cards to exchange, max 3)
+- Created: backend/SobeSobe.Api/DTOs/ExchangeCardsResponse.cs (round ID, player session ID, cards exchanged count, new hand)
+- Modified: backend/SobeSobe.Api/Program.cs (added POST /api/games/{id}/rounds/current/exchange-cards endpoint, fixed SQLite APPLY query issue)
+
+### Learnings
+- SQLite doesn't support SQL APPLY operation used in `Include(g => g.Rounds.OrderByDescending(...).Take(1))`
+- Fixed by splitting query: load Game first, then load current Round separately with explicit OrderByDescending
+- Card exchange must exclude all cards in play (all players' hands) to prevent duplicates
+- System.Text.Json.JsonSerializer used consistently for card serialization
+- Exchange logic validates cards exist before removal to prevent corrupting hand state
+- Empty exchange (0 cards) returns current hand without modification (valid use case)
+- Ace of trump check uses round.TrumpSuit.ToString() to compare with card.Suit string
+- CardDealingService.CreateDeck() and ShuffleDeck() reused for drawing replacement cards
+- Testing workflow: register → login → create → join → start → select trump → deal → exchange (0-3 cards)
+- All edge cases tested successfully: >3 cards (400), Ace of trump (400), card not in hand (400), valid exchange (200)
+
+### Next steps
+- Implement play card endpoint (POST /api/games/{id}/rounds/current/play-card) - trick-taking mechanics with follow suit and trump rules
+- Implement get game state endpoint (GET /api/games/{id}/state) - full game state for UI
+- Implement score history endpoint (GET /api/games/{id}/scores)
+- Add real-time notifications for game events (gRPC/SignalR)
+- Consider transitioning round from CardExchange to Playing phase automatically when all players have exchanged
+
 ## 2026-02-02 - Issue #1: Backend Development - Card Dealing Implementation
 
 ### What was implemented

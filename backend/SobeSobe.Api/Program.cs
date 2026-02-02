@@ -1158,4 +1158,152 @@ app.MapPost("/api/games/{id:guid}/rounds/current/deal-cards", async (Guid id, Ht
 .RequireAuthorization()
 .WithName("DealCards");
 
+// Exchange Cards endpoint (requires authentication)
+app.MapPost("/api/games/{id:guid}/rounds/current/exchange-cards", async (Guid id, ExchangeCardsRequest request, HttpContext httpContext, ApplicationDbContext db) =>
+{
+    // Get user ID from JWT claims
+    var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+    if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    // Validate request
+    if (request.CardsToExchange.Count > 3)
+    {
+        return Results.BadRequest(new { error = "Cannot exchange more than 3 cards" });
+    }
+
+    // Validate all cards are valid
+    foreach (var card in request.CardsToExchange)
+    {
+        if (!card.IsValid())
+        {
+            return Results.BadRequest(new { error = $"Invalid card: {card}" });
+        }
+    }
+
+    // Find game with player sessions
+    var game = await db.Games
+        .Include(g => g.PlayerSessions)
+        .FirstOrDefaultAsync(g => g.Id == id);
+
+    if (game == null)
+    {
+        return Results.NotFound(new { error = "Game not found" });
+    }
+
+    // Get current round with hands
+    var currentRound = await db.Rounds
+        .Include(r => r.Hands)
+        .ThenInclude(h => h.PlayerSession)
+        .Where(r => r.GameId == id)
+        .OrderByDescending(r => r.RoundNumber)
+        .FirstOrDefaultAsync();
+    if (currentRound == null)
+    {
+        return Results.NotFound(new { error = "No active round found" });
+    }
+
+    // Verify round is in CardExchange phase
+    if (currentRound.Status != RoundStatus.CardExchange)
+    {
+        return Results.StatusCode(409); // Conflict - wrong phase
+    }
+
+    // Find player's session
+    var playerSession = game.PlayerSessions.FirstOrDefault(ps => ps.UserId == userId);
+    if (playerSession == null)
+    {
+        return Results.NotFound(new { error = "Player not in this game" });
+    }
+
+    // Find player's hand
+    var hand = currentRound.Hands.FirstOrDefault(h => h.PlayerSessionId == playerSession.Id);
+    if (hand == null)
+    {
+        return Results.BadRequest(new { error = "Player is not playing this round" });
+    }
+
+    // Get current cards
+    var currentCards = hand.Cards;
+
+    // Validate player has all cards they want to exchange
+    foreach (var cardToExchange in request.CardsToExchange)
+    {
+        var hasCard = currentCards.Any(c => c.Suit == cardToExchange.Suit && c.Rank == cardToExchange.Rank);
+        if (!hasCard)
+        {
+            return Results.BadRequest(new { error = $"You don't have the card: {cardToExchange}" });
+        }
+    }
+
+    // Validate not trying to exchange Ace of trump
+    var trumpSuit = currentRound.TrumpSuit.ToString();
+    foreach (var cardToExchange in request.CardsToExchange)
+    {
+        if (cardToExchange.Rank == "Ace" && cardToExchange.Suit == trumpSuit)
+        {
+            return Results.BadRequest(new { error = "Cannot exchange the Ace of trump" });
+        }
+    }
+
+    // If no cards to exchange, return current hand
+    if (request.CardsToExchange.Count == 0)
+    {
+        return Results.Ok(new ExchangeCardsResponse
+        {
+            RoundId = currentRound.Id,
+            PlayerSessionId = playerSession.Id,
+            CardsExchanged = 0,
+            NewHand = currentCards
+        });
+    }
+
+    // Remove cards from hand
+    foreach (var cardToExchange in request.CardsToExchange)
+    {
+        var cardToRemove = currentCards.First(c => c.Suit == cardToExchange.Suit && c.Rank == cardToExchange.Rank);
+        currentCards.Remove(cardToRemove);
+    }
+
+    // Create new deck for drawing replacement cards (exclude cards still in play)
+    var deck = CardDealingService.CreateDeck();
+    
+    // Remove all cards that are currently in any player's hand
+    var allPlayersCards = currentRound.Hands
+        .SelectMany(h => h.Cards)
+        .ToList();
+    
+    foreach (var cardInPlay in allPlayersCards)
+    {
+        var cardToRemove = deck.FirstOrDefault(c => c.Suit == cardInPlay.Suit && c.Rank == cardInPlay.Rank);
+        if (cardToRemove != null)
+        {
+            deck.Remove(cardToRemove);
+        }
+    }
+
+    // Shuffle remaining deck
+    CardDealingService.ShuffleDeck(deck);
+
+    // Draw replacement cards
+    var newCards = deck.Take(request.CardsToExchange.Count).ToList();
+    currentCards.AddRange(newCards);
+
+    // Update hand
+    hand.CardsJson = System.Text.Json.JsonSerializer.Serialize(currentCards);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new ExchangeCardsResponse
+    {
+        RoundId = currentRound.Id,
+        PlayerSessionId = playerSession.Id,
+        CardsExchanged = request.CardsToExchange.Count,
+        NewHand = currentCards
+    });
+})
+.RequireAuthorization()
+.WithName("ExchangeCards");
+
 app.Run();
