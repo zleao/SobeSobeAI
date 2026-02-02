@@ -727,3 +727,39 @@
 - Implement remaining user management endpoints (get profile, update profile, get statistics)
 - Start implementing game management endpoints (create game, join game, list games)
 
+
+## 2026-02-02 - Issue #1: Backend Development - Leave Game Endpoint Implementation
+
+### What was implemented
+- Implemented POST /api/games/{id}/leave endpoint for leaving games before they start
+- Endpoint requires authentication (.RequireAuthorization())
+- Validates game exists and is in Waiting status (cannot leave started games)
+- Checks if user is actually in the game (returns 404 if not)
+- Ownership transfer: If game creator leaves and other players remain, ownership transfers to next player by position
+- Automatic game deletion: If last player leaves, the game is deleted
+- Sets LeftAt timestamp before removing PlayerSession
+- Returns 200 OK with success message
+- Error handling: 401 Unauthorized (no token), 404 Not Found (game not found or user not in game), 400 Bad Request (game already started)
+
+### Files changed
+- Modified: backend/SobeSobe.Api/Program.cs (added POST /api/games/{id}/leave endpoint)
+
+### Learnings
+- CreatedByUserId property tracks game ownership and can be transferred when creator leaves
+- EF Core Remove() on PlayerSession deletes the record from database
+- Ownership transfer logic finds next player by position using OrderBy(ps => ps.Position).First()
+- Game deletion when last player leaves prevents orphaned games
+- LeftAt timestamp provides audit trail for player departures
+- PlayerSessions.Count check before removal determines if game should be deleted
+- Where clause excludes current leaving user when finding next owner
+- Error scenarios: not in game (404), game already started (400), unauthorized (401)
+- Testing workflow: register → login (2 users) → create game (user 1) → join game (user 2) → leave game (user 2) → verify player count reduced
+
+### Next steps
+- Implement cancel game endpoint (DELETE /api/games/{id}) - allows creator to delete game
+- Implement start game endpoint (POST /api/games/{id}/start) - transitions game to InProgress and creates first round
+- Test ownership transfer scenario (creator leaves, verify new owner)
+- Test last player leaving scenario (verify game deletion)
+- Implement game state machine for round and trick management
+- Add real-time notifications for game events (gRPC/SignalR)
+

@@ -563,4 +563,66 @@ app.MapPost("/api/games/{id:guid}/join", async (Guid id, HttpContext httpContext
 .RequireAuthorization()
 .WithName("JoinGame");
 
+// Leave Game endpoint (requires authentication)
+app.MapPost("/api/games/{id:guid}/leave", async (Guid id, HttpContext httpContext, ApplicationDbContext db) =>
+{
+    // Get user ID from JWT claims
+    var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+    if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    // Find game with player sessions
+    var game = await db.Games
+        .Include(g => g.PlayerSessions)
+        .FirstOrDefaultAsync(g => g.Id == id);
+
+    if (game == null)
+    {
+        return Results.NotFound(new { error = "Game not found" });
+    }
+
+    // Check if game has already started
+    if (game.Status != GameStatus.Waiting)
+    {
+        return Results.BadRequest(new { error = "Cannot leave game that has already started" });
+    }
+
+    // Find player's session in this game
+    var playerSession = game.PlayerSessions.FirstOrDefault(ps => ps.UserId == userId);
+    if (playerSession == null)
+    {
+        return Results.NotFound(new { error = "You are not in this game" });
+    }
+
+    // If this is the game creator and there are other players, transfer ownership
+    if (game.CreatedByUserId == userId && game.PlayerSessions.Count > 1)
+    {
+        // Transfer ownership to the next player (by position)
+        var nextPlayer = game.PlayerSessions
+            .Where(ps => ps.UserId != userId)
+            .OrderBy(ps => ps.Position)
+            .First();
+        
+        game.CreatedByUserId = nextPlayer.UserId;
+    }
+
+    // Remove player session
+    playerSession.LeftAt = DateTime.UtcNow;
+    db.PlayerSessions.Remove(playerSession);
+
+    // If no players left, delete the game
+    if (game.PlayerSessions.Count == 1) // Only this player left
+    {
+        db.Games.Remove(game);
+    }
+
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new { message = "Left game successfully" });
+})
+.RequireAuthorization()
+.WithName("LeaveGame");
+
 app.Run();
