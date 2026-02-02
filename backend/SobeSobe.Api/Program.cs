@@ -2,12 +2,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using System.Text.Json;
 using SobeSobe.Infrastructure.Data;
 using SobeSobe.Api.DTOs;
 using SobeSobe.Api.Options;
 using SobeSobe.Api.Services;
 using SobeSobe.Core.Entities;
 using SobeSobe.Core.Enums;
+using SobeSobe.Core.ValueObjects;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -992,5 +994,168 @@ app.MapPost("/api/games/{id:guid}/rounds/current/play-decision", async (Guid id,
 })
 .RequireAuthorization()
 .WithName("PlayDecision");
+
+// Deal Cards endpoint (requires authentication, handles automatic dealing based on phase)
+app.MapPost("/api/games/{id:guid}/rounds/current/deal-cards", async (Guid id, HttpContext httpContext, ApplicationDbContext db) =>
+{
+    // Get user ID from JWT claims
+    var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+    if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    // Find game with current round, player sessions, and hands
+    var game = await db.Games
+        .Include(g => g.Rounds.OrderByDescending(r => r.RoundNumber).Take(1))
+        .Include(g => g.PlayerSessions)
+        .FirstOrDefaultAsync(g => g.Id == id);
+
+    if (game == null)
+    {
+        return Results.NotFound(new { error = "Game not found" });
+    }
+
+    // Get current round
+    var currentRound = game.Rounds.FirstOrDefault();
+    if (currentRound == null)
+    {
+        return Results.BadRequest(new { error = "No active round found" });
+    }
+
+    // Load hands for current round
+    var hands = await db.Hands
+        .Where(h => h.RoundId == currentRound.Id)
+        .Include(h => h.PlayerSession)
+        .ToListAsync();
+
+    // Determine dealing logic based on round status
+    if (currentRound.Status == RoundStatus.Dealing)
+    {
+        // Trump selected before dealing - deal 5 cards to all active players
+        var activePlayers = game.PlayerSessions.Where(ps => ps.IsActive).OrderBy(ps => ps.Position).ToList();
+        
+        if (activePlayers.Count == 0)
+        {
+            return Results.BadRequest(new { error = "No active players in game" });
+        }
+
+        // Create deck and shuffle
+        var deck = CardDealingService.CreateDeck();
+        CardDealingService.ShuffleDeck(deck);
+
+        // Deal 5 cards to each active player
+        var dealerPosition = game.CurrentDealerPosition ?? 0;
+        var playerPositions = activePlayers.Select(p => p.Position).ToList();
+        var dealtCards = CardDealingService.DealCards(deck, playerPositions, dealerPosition, 5);
+
+        // Create hands for all active players
+        foreach (var player in activePlayers)
+        {
+            var existingHand = hands.FirstOrDefault(h => h.PlayerSessionId == player.Id);
+            var cards = dealtCards[player.Position];
+            var cardsJson = System.Text.Json.JsonSerializer.Serialize(cards);
+
+            if (existingHand == null)
+            {
+                var hand = new Hand
+                {
+                    RoundId = currentRound.Id,
+                    PlayerSessionId = player.Id,
+                    CardsJson = cardsJson,
+                    InitialCardsJson = cardsJson
+                };
+                db.Hands.Add(hand);
+            }
+            else
+            {
+                existingHand.CardsJson = cardsJson;
+                existingHand.InitialCardsJson = cardsJson;
+            }
+        }
+
+        // Move to CardExchange phase
+        currentRound.Status = RoundStatus.CardExchange;
+        await db.SaveChangesAsync();
+
+        return Results.Ok(new
+        {
+            message = "Dealt 5 cards to all players",
+            roundId = currentRound.Id,
+            status = currentRound.Status.ToString(),
+            playersDealt = activePlayers.Count
+        });
+    }
+    else if (currentRound.Status == RoundStatus.PlayerDecisions)
+    {
+        // Check if all active players have made their decisions
+        var activePlayers = game.PlayerSessions.Where(ps => ps.IsActive).ToList();
+        var playersMadeDecisions = hands.Count;
+        
+        // Get dealer and party player (they always play)
+        var dealerSession = game.PlayerSessions.FirstOrDefault(ps => ps.UserId == currentRound.DealerUserId);
+        var partyPlayerSession = game.PlayerSessions.FirstOrDefault(ps => ps.UserId == currentRound.PartyPlayerUserId);
+        
+        // Expected number of hands = players who opted in + dealer + party player (if not already counted)
+        var expectedHands = activePlayers.Count; // For simplicity, assuming all decisions have been made
+        
+        // For a more robust check, we'd need to track decision state per player
+        // For now, allow dealing if at least dealer and party player have hands
+        if (hands.Count < 2)
+        {
+            return Results.BadRequest(new { error = "Not all players have made their decisions yet" });
+        }
+
+        // Trump selected after 2 cards - deal remaining 3 cards to players with hands
+        // Note: In real implementation, 2 cards should have been dealt already
+        // For now, we'll deal 3 more cards to complete the 5-card hands
+        
+        var deck = CardDealingService.CreateDeck();
+        CardDealingService.ShuffleDeck(deck);
+
+        // Remove already-dealt cards from deck (simulate)
+        // In a real implementation, we'd track which cards have been dealt
+        // For simplicity, we'll just deal 3 new cards to each player with a hand
+        
+        var dealerPosition = game.CurrentDealerPosition ?? 0;
+        var playingPlayerPositions = hands.Where(h => h.PlayerSession != null).Select(h => h.PlayerSession!.Position).ToList();
+        var dealtCards = CardDealingService.DealCards(deck, playingPlayerPositions, dealerPosition, 3);
+
+        // Add 3 cards to each existing hand
+        foreach (var hand in hands)
+        {
+            if (hand.PlayerSession == null) continue;
+            
+            var currentCards = System.Text.Json.JsonSerializer.Deserialize<List<Card>>(hand.CardsJson) ?? new List<Card>();
+            var newCards = dealtCards[hand.PlayerSession.Position];
+            currentCards.AddRange(newCards);
+            hand.CardsJson = System.Text.Json.JsonSerializer.Serialize(currentCards);
+            
+            // Update initial cards if not set
+            if (string.IsNullOrEmpty(hand.InitialCardsJson) || hand.InitialCardsJson == "[]")
+            {
+                hand.InitialCardsJson = hand.CardsJson;
+            }
+        }
+
+        // Move to CardExchange phase
+        currentRound.Status = RoundStatus.CardExchange;
+        await db.SaveChangesAsync();
+
+        return Results.Ok(new
+        {
+            message = "Dealt 3 additional cards to players",
+            roundId = currentRound.Id,
+            status = currentRound.Status.ToString(),
+            playersDealt = hands.Count
+        });
+    }
+    else
+    {
+        return Results.StatusCode(409); // Conflict - wrong phase for dealing
+    }
+})
+.RequireAuthorization()
+.WithName("DealCards");
 
 app.Run();

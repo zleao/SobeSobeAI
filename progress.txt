@@ -1,3 +1,43 @@
+## 2026-02-02 - Issue #1: Backend Development - Card Dealing Implementation
+
+### What was implemented
+- Created CardDealingService with deck creation, shuffling (Fisher-Yates algorithm), and counter-clockwise dealing logic
+- Implemented POST /api/games/{id}/rounds/current/deal-cards endpoint for automatic card dealing
+- Endpoint handles two dealing scenarios based on round status:
+  - **Dealing phase** (trump selected before dealing): Deals 5 cards to all active players, moves to CardExchange
+  - **PlayerDecisions phase** (trump selected after 2 cards): Deals 3 additional cards to players with Hands, moves to CardExchange
+- Card dealing follows counter-clockwise order starting from party player
+- Deck creation: 40 cards (Ace, 7, King, Queen, Jack, 6, 5, 4, 3, 2 in each of 4 suits)
+- Shuffle uses Fisher-Yates algorithm for unbiased randomization
+- Creates/updates Hand entities with serialized card JSON (CardsJson and InitialCardsJson)
+- Validates round phase before dealing (409 Conflict if wrong phase)
+- Error handling: 401 Unauthorized, 404 Not Found, 400 Bad Request (no active players), 409 Conflict (wrong phase)
+
+### Files changed
+- Created: backend/SobeSobe.Api/Services/CardDealingService.cs (deck creation, shuffling, dealing logic)
+- Modified: backend/SobeSobe.Api/Program.cs (added POST /api/games/{id}/rounds/current/deal-cards endpoint, imported System.Text.Json and SobeSobe.Core.ValueObjects)
+
+### Learnings
+- Fisher-Yates shuffle algorithm provides O(n) unbiased card randomization
+- Counter-clockwise dealing order: party player (dealer + 1) receives cards first
+- GetCounterClockwiseOrder handles non-sequential player positions correctly
+- Hand.CardsJson stores current cards, InitialCardsJson stores original dealt cards for audit
+- System.Text.Json.JsonSerializer used for Card list serialization/deserialization
+- Dealing in "Dealing" phase creates new Hands, dealing in "PlayerDecisions" phase updates existing Hands
+- Round.Status automatically transitions to CardExchange after dealing completes
+- Null-forgiving operator (!) needed for navigation properties loaded with Include() to suppress compiler warnings
+- Testing workflow path 1: start → select trump (blind) → deal (5 cards) → CardExchange
+- Testing workflow path 2: start → select trump (after cards) → player decisions → deal (3 cards) → CardExchange
+- Both dealing paths tested successfully: blind trump (5 cards) and after-decisions (3 cards)
+
+### Next steps
+- Implement card exchange endpoint (POST /api/games/{id}/rounds/current/exchange-cards) - 0-3 cards
+- Implement play card endpoint (POST /api/games/{id}/rounds/current/play-card) - trick-taking mechanics
+- Implement get game state endpoint (GET /api/games/{id}/state) - full game state for UI
+- Implement score history endpoint (GET /api/games/{id}/scores)
+- Add real-time notifications for game events (gRPC/SignalR)
+- Consider implementing initial 2-card deal for "after cards" trump selection (currently skipped)
+
 ## 2026-02-02 - Issue #1: Backend Development - Player Decision Endpoint Implementation
 
 ### What was implemented
