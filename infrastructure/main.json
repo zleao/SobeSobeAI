@@ -1,0 +1,692 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.40.2.10011",
+      "templateHash": "9456419738676204954"
+    }
+  },
+  "parameters": {
+    "environmentName": {
+      "type": "string",
+      "allowedValues": [
+        "dev",
+        "staging",
+        "prod"
+      ],
+      "metadata": {
+        "description": "The environment name (dev, staging, prod)"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "westeurope",
+      "metadata": {
+        "description": "The Azure region for all resources"
+      }
+    },
+    "resourceSuffix": {
+      "type": "string",
+      "defaultValue": "[uniqueString(subscription().id, parameters('environmentName'))]",
+      "metadata": {
+        "description": "The unique suffix for resource names"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/resourceGroups",
+      "apiVersion": "2021-04-01",
+      "name": "[format('rg-sobesobe-{0}', parameters('environmentName'))]",
+      "location": "[parameters('location')]",
+      "tags": {
+        "Environment": "[parameters('environmentName')]",
+        "Application": "SobeSobe",
+        "ManagedBy": "Bicep"
+      }
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "keyVaultDeployment",
+      "resourceGroup": "[format('rg-sobesobe-{0}', parameters('environmentName'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "resourceSuffix": {
+            "value": "[parameters('resourceSuffix')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.40.2.10011",
+              "templateHash": "119287504627744875"
+            }
+          },
+          "parameters": {
+            "environmentName": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "resourceSuffix": {
+              "type": "string"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.KeyVault/vaults",
+              "apiVersion": "2023-07-01",
+              "name": "[format('kv-sobesobe-{0}', parameters('resourceSuffix'))]",
+              "location": "[parameters('location')]",
+              "tags": {
+                "Environment": "[parameters('environmentName')]"
+              },
+              "properties": {
+                "sku": {
+                  "family": "A",
+                  "name": "standard"
+                },
+                "tenantId": "[subscription().tenantId]",
+                "enableRbacAuthorization": true,
+                "enableSoftDelete": true,
+                "softDeleteRetentionInDays": 90,
+                "enablePurgeProtection": true,
+                "networkAcls": {
+                  "defaultAction": "Allow",
+                  "bypass": "AzureServices"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "keyVaultName": {
+              "type": "string",
+              "value": "[format('kv-sobesobe-{0}', parameters('resourceSuffix'))]"
+            },
+            "keyVaultId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.KeyVault/vaults', format('kv-sobesobe-{0}', parameters('resourceSuffix')))]"
+            },
+            "keyVaultUri": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', format('kv-sobesobe-{0}', parameters('resourceSuffix'))), '2023-07-01').vaultUri]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-sobesobe-{0}', parameters('environmentName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "appServiceDeployment",
+      "resourceGroup": "[format('rg-sobesobe-{0}', parameters('environmentName'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "resourceSuffix": {
+            "value": "[parameters('resourceSuffix')]"
+          },
+          "keyVaultName": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-sobesobe-{0}', parameters('environmentName'))), 'Microsoft.Resources/deployments', 'keyVaultDeployment'), '2025-04-01').outputs.keyVaultName.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.40.2.10011",
+              "templateHash": "6473404717170037023"
+            }
+          },
+          "parameters": {
+            "environmentName": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "resourceSuffix": {
+              "type": "string"
+            },
+            "keyVaultName": {
+              "type": "string"
+            }
+          },
+          "variables": {
+            "skuMap": {
+              "dev": {
+                "name": "B1",
+                "tier": "Basic",
+                "capacity": 1
+              },
+              "staging": {
+                "name": "B2",
+                "tier": "Basic",
+                "capacity": 1
+              },
+              "prod": {
+                "name": "P1v3",
+                "tier": "PremiumV3",
+                "capacity": 2
+              }
+            },
+            "keyVaultSecretsUserRoleId": "4633458b-17de-408a-b874-0445c86b69e6"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2023-01-01",
+              "name": "[format('asp-sobesobe-{0}', parameters('environmentName'))]",
+              "location": "[parameters('location')]",
+              "tags": {
+                "Environment": "[parameters('environmentName')]"
+              },
+              "sku": "[variables('skuMap')[parameters('environmentName')]]",
+              "kind": "linux",
+              "properties": {
+                "reserved": true
+              }
+            },
+            {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2023-01-01",
+              "name": "[format('app-sobesobe-api-{0}', parameters('resourceSuffix'))]",
+              "location": "[parameters('location')]",
+              "tags": {
+                "Environment": "[parameters('environmentName')]"
+              },
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', format('asp-sobesobe-{0}', parameters('environmentName')))]",
+                "httpsOnly": true,
+                "siteConfig": {
+                  "linuxFxVersion": "DOTNETCORE|10.0",
+                  "alwaysOn": "[equals(parameters('environmentName'), 'prod')]",
+                  "ftpsState": "Disabled",
+                  "minTlsVersion": "1.2",
+                  "http20Enabled": true,
+                  "healthCheckPath": "/health",
+                  "appSettings": [
+                    {
+                      "name": "ASPNETCORE_ENVIRONMENT",
+                      "value": "[if(equals(parameters('environmentName'), 'prod'), 'Production', if(equals(parameters('environmentName'), 'staging'), 'Staging', 'Development'))]"
+                    },
+                    {
+                      "name": "KeyVaultName",
+                      "value": "[parameters('keyVaultName')]"
+                    }
+                  ]
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', format('asp-sobesobe-{0}', parameters('environmentName')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName'))]",
+              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', parameters('keyVaultName')), resourceId('Microsoft.Web/sites', format('app-sobesobe-api-{0}', parameters('resourceSuffix'))), variables('keyVaultSecretsUserRoleId'))]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('keyVaultSecretsUserRoleId'))]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', format('app-sobesobe-api-{0}', parameters('resourceSuffix'))), '2023-01-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', format('app-sobesobe-api-{0}', parameters('resourceSuffix')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "appServicePlanName": {
+              "type": "string",
+              "value": "[format('asp-sobesobe-{0}', parameters('environmentName'))]"
+            },
+            "appServiceName": {
+              "type": "string",
+              "value": "[format('app-sobesobe-api-{0}', parameters('resourceSuffix'))]"
+            },
+            "appServiceUrl": {
+              "type": "string",
+              "value": "[format('https://{0}', reference(resourceId('Microsoft.Web/sites', format('app-sobesobe-api-{0}', parameters('resourceSuffix'))), '2023-01-01').defaultHostName)]"
+            },
+            "appServicePrincipalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Web/sites', format('app-sobesobe-api-{0}', parameters('resourceSuffix'))), '2023-01-01', 'full').identity.principalId]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-sobesobe-{0}', parameters('environmentName'))), 'Microsoft.Resources/deployments', 'keyVaultDeployment')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-sobesobe-{0}', parameters('environmentName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "staticWebAppDeployment",
+      "resourceGroup": "[format('rg-sobesobe-{0}', parameters('environmentName'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "resourceSuffix": {
+            "value": "[parameters('resourceSuffix')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.40.2.10011",
+              "templateHash": "8746482944901846867"
+            }
+          },
+          "parameters": {
+            "environmentName": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "resourceSuffix": {
+              "type": "string"
+            }
+          },
+          "variables": {
+            "skuMap": {
+              "dev": "Free",
+              "staging": "Standard",
+              "prod": "Standard"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Web/staticSites",
+              "apiVersion": "2023-01-01",
+              "name": "[format('swa-sobesobe-{0}', parameters('resourceSuffix'))]",
+              "location": "[parameters('location')]",
+              "tags": {
+                "Environment": "[parameters('environmentName')]"
+              },
+              "sku": {
+                "name": "[variables('skuMap')[parameters('environmentName')]]",
+                "tier": "[variables('skuMap')[parameters('environmentName')]]"
+              },
+              "properties": {
+                "repositoryUrl": "https://github.com/zleao/SobeSobeAI",
+                "branch": "[if(equals(parameters('environmentName'), 'prod'), 'main', parameters('environmentName'))]",
+                "buildProperties": {
+                  "appLocation": "/frontend",
+                  "apiLocation": "",
+                  "outputLocation": "dist/sobesobe/browser"
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "staticWebAppName": {
+              "type": "string",
+              "value": "[format('swa-sobesobe-{0}', parameters('resourceSuffix'))]"
+            },
+            "staticWebAppUrl": {
+              "type": "string",
+              "value": "[format('https://{0}', reference(resourceId('Microsoft.Web/staticSites', format('swa-sobesobe-{0}', parameters('resourceSuffix'))), '2023-01-01').defaultHostname)]"
+            },
+            "staticWebAppId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Web/staticSites', format('swa-sobesobe-{0}', parameters('resourceSuffix')))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-sobesobe-{0}', parameters('environmentName')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "monitoringDeployment",
+      "resourceGroup": "[format('rg-sobesobe-{0}', parameters('environmentName'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "resourceSuffix": {
+            "value": "[parameters('resourceSuffix')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.40.2.10011",
+              "templateHash": "473022098396454006"
+            }
+          },
+          "parameters": {
+            "environmentName": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "resourceSuffix": {
+              "type": "string"
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.OperationalInsights/workspaces",
+              "apiVersion": "2023-09-01",
+              "name": "[format('log-sobesobe-{0}', parameters('resourceSuffix'))]",
+              "location": "[parameters('location')]",
+              "tags": {
+                "Environment": "[parameters('environmentName')]"
+              },
+              "properties": {
+                "sku": {
+                  "name": "PerGB2018"
+                },
+                "retentionInDays": "[if(equals(parameters('environmentName'), 'prod'), 90, 30)]",
+                "features": {
+                  "enableLogAccessUsingOnlyResourcePermissions": true
+                }
+              }
+            },
+            {
+              "type": "Microsoft.Insights/components",
+              "apiVersion": "2020-02-02",
+              "name": "[format('appi-sobesobe-{0}', parameters('resourceSuffix'))]",
+              "location": "[parameters('location')]",
+              "tags": {
+                "Environment": "[parameters('environmentName')]"
+              },
+              "kind": "web",
+              "properties": {
+                "Application_Type": "web",
+                "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', format('log-sobesobe-{0}', parameters('resourceSuffix')))]",
+                "IngestionMode": "LogAnalytics",
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.OperationalInsights/workspaces', format('log-sobesobe-{0}', parameters('resourceSuffix')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "applicationInsightsName": {
+              "type": "string",
+              "value": "[format('appi-sobesobe-{0}', parameters('resourceSuffix'))]"
+            },
+            "applicationInsightsId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.Insights/components', format('appi-sobesobe-{0}', parameters('resourceSuffix')))]"
+            },
+            "instrumentationKey": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/components', format('appi-sobesobe-{0}', parameters('resourceSuffix'))), '2020-02-02').InstrumentationKey]"
+            },
+            "connectionString": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Insights/components', format('appi-sobesobe-{0}', parameters('resourceSuffix'))), '2020-02-02').ConnectionString]"
+            },
+            "workspaceName": {
+              "type": "string",
+              "value": "[format('log-sobesobe-{0}', parameters('resourceSuffix'))]"
+            },
+            "workspaceId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.OperationalInsights/workspaces', format('log-sobesobe-{0}', parameters('resourceSuffix')))]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-sobesobe-{0}', parameters('environmentName')))]"
+      ]
+    },
+    {
+      "condition": "[equals(parameters('environmentName'), 'prod')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "databaseDeployment",
+      "resourceGroup": "[format('rg-sobesobe-{0}', parameters('environmentName'))]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "environmentName": {
+            "value": "[parameters('environmentName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "resourceSuffix": {
+            "value": "[parameters('resourceSuffix')]"
+          },
+          "keyVaultName": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-sobesobe-{0}', parameters('environmentName'))), 'Microsoft.Resources/deployments', 'keyVaultDeployment'), '2025-04-01').outputs.keyVaultName.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.40.2.10011",
+              "templateHash": "10655168198229768042"
+            }
+          },
+          "parameters": {
+            "environmentName": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "resourceSuffix": {
+              "type": "string"
+            },
+            "keyVaultName": {
+              "type": "string"
+            },
+            "sqlAdminPassword": {
+              "type": "securestring",
+              "defaultValue": "[newGuid()]",
+              "metadata": {
+                "description": "SQL Server administrator password"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Sql/servers",
+              "apiVersion": "2023-05-01-preview",
+              "name": "[format('sql-sobesobe-{0}', parameters('resourceSuffix'))]",
+              "location": "[parameters('location')]",
+              "tags": {
+                "Environment": "[parameters('environmentName')]"
+              },
+              "properties": {
+                "administratorLogin": "sobesobe-admin",
+                "administratorLoginPassword": "[parameters('sqlAdminPassword')]",
+                "version": "12.0",
+                "minimalTlsVersion": "1.2",
+                "publicNetworkAccess": "Enabled"
+              }
+            },
+            {
+              "type": "Microsoft.Sql/servers/firewallRules",
+              "apiVersion": "2023-05-01-preview",
+              "name": "[format('{0}/{1}', format('sql-sobesobe-{0}', parameters('resourceSuffix')), 'AllowAzureServices')]",
+              "properties": {
+                "startIpAddress": "0.0.0.0",
+                "endIpAddress": "0.0.0.0"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', format('sql-sobesobe-{0}', parameters('resourceSuffix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Sql/servers/databases",
+              "apiVersion": "2023-05-01-preview",
+              "name": "[format('{0}/{1}', format('sql-sobesobe-{0}', parameters('resourceSuffix')), 'sobesobe-db')]",
+              "location": "[parameters('location')]",
+              "tags": {
+                "Environment": "[parameters('environmentName')]"
+              },
+              "sku": {
+                "name": "Basic",
+                "tier": "Basic",
+                "capacity": 5
+              },
+              "properties": {
+                "collation": "SQL_Latin1_General_CP1_CI_AS",
+                "maxSizeBytes": 2147483648,
+                "catalogCollation": "SQL_Latin1_General_CP1_CI_AS",
+                "zoneRedundant": false,
+                "readScale": "Disabled",
+                "requestedBackupStorageRedundancy": "Local"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', format('sql-sobesobe-{0}', parameters('resourceSuffix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', parameters('keyVaultName'), 'SqlConnectionString')]",
+              "properties": {
+                "value": "[format('Server=tcp:{0},1433;Initial Catalog={1};Persist Security Info=False;User ID={2};Password={3};MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;', reference(resourceId('Microsoft.Sql/servers', format('sql-sobesobe-{0}', parameters('resourceSuffix'))), '2023-05-01-preview').fullyQualifiedDomainName, 'sobesobe-db', reference(resourceId('Microsoft.Sql/servers', format('sql-sobesobe-{0}', parameters('resourceSuffix'))), '2023-05-01-preview').administratorLogin, parameters('sqlAdminPassword'))]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers/databases', format('sql-sobesobe-{0}', parameters('resourceSuffix')), 'sobesobe-db')]",
+                "[resourceId('Microsoft.Sql/servers', format('sql-sobesobe-{0}', parameters('resourceSuffix')))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "serverName": {
+              "type": "string",
+              "value": "[format('sql-sobesobe-{0}', parameters('resourceSuffix'))]"
+            },
+            "databaseName": {
+              "type": "string",
+              "value": "sobesobe-db"
+            },
+            "fullyQualifiedDomainName": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Sql/servers', format('sql-sobesobe-{0}', parameters('resourceSuffix'))), '2023-05-01-preview').fullyQualifiedDomainName]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-sobesobe-{0}', parameters('environmentName'))), 'Microsoft.Resources/deployments', 'keyVaultDeployment')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', format('rg-sobesobe-{0}', parameters('environmentName')))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "resourceGroupName": {
+      "type": "string",
+      "value": "[format('rg-sobesobe-{0}', parameters('environmentName'))]"
+    },
+    "appServiceName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-sobesobe-{0}', parameters('environmentName'))), 'Microsoft.Resources/deployments', 'appServiceDeployment'), '2025-04-01').outputs.appServiceName.value]"
+    },
+    "appServiceUrl": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-sobesobe-{0}', parameters('environmentName'))), 'Microsoft.Resources/deployments', 'appServiceDeployment'), '2025-04-01').outputs.appServiceUrl.value]"
+    },
+    "staticWebAppName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-sobesobe-{0}', parameters('environmentName'))), 'Microsoft.Resources/deployments', 'staticWebAppDeployment'), '2025-04-01').outputs.staticWebAppName.value]"
+    },
+    "staticWebAppUrl": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-sobesobe-{0}', parameters('environmentName'))), 'Microsoft.Resources/deployments', 'staticWebAppDeployment'), '2025-04-01').outputs.staticWebAppUrl.value]"
+    },
+    "keyVaultName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-sobesobe-{0}', parameters('environmentName'))), 'Microsoft.Resources/deployments', 'keyVaultDeployment'), '2025-04-01').outputs.keyVaultName.value]"
+    },
+    "applicationInsightsName": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-sobesobe-{0}', parameters('environmentName'))), 'Microsoft.Resources/deployments', 'monitoringDeployment'), '2025-04-01').outputs.applicationInsightsName.value]"
+    },
+    "applicationInsightsInstrumentationKey": {
+      "type": "string",
+      "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-sobesobe-{0}', parameters('environmentName'))), 'Microsoft.Resources/deployments', 'monitoringDeployment'), '2025-04-01').outputs.instrumentationKey.value]"
+    },
+    "databaseServerName": {
+      "type": "string",
+      "value": "[if(equals(parameters('environmentName'), 'prod'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-sobesobe-{0}', parameters('environmentName'))), 'Microsoft.Resources/deployments', 'databaseDeployment'), '2025-04-01').outputs.serverName.value, 'SQLite')]"
+    },
+    "databaseName": {
+      "type": "string",
+      "value": "[if(equals(parameters('environmentName'), 'prod'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, format('rg-sobesobe-{0}', parameters('environmentName'))), 'Microsoft.Resources/deployments', 'databaseDeployment'), '2025-04-01').outputs.databaseName.value, 'Local SQLite file')]"
+    }
+  }
+}

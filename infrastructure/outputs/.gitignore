@@ -1,0 +1,5 @@
+# Ignore deployment outputs (contain sensitive information)
+*.json
+
+# Allow tracking of empty directory
+!.gitkeep

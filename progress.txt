@@ -295,3 +295,71 @@
 - Add integration tests to CI pipeline
 - Configure Dependabot for automated security updates
 - Add CodeQL security scanning
+
+## 2026-02-02 - Issue #10: Create Azure infrastructure with Bicep
+
+### What was implemented
+- Created comprehensive Azure infrastructure as code using Bicep templates
+- **Main orchestration file** (main.bicep): Orchestrates all resources at subscription scope
+- **Module files**:
+  - key-vault.bicep: Azure Key Vault for secrets with RBAC, soft delete, purge protection
+  - app-service.bicep: App Service Plan + App Service for .NET 10 backend with managed identity
+  - static-web-app.bicep: Azure Static Web Apps for Angular frontend with GitHub integration
+  - monitoring.bicep: Log Analytics Workspace + Application Insights for observability
+  - database.bicep: Azure SQL Server + Database (production only, dev/staging use SQLite)
+- **Parameter files**: dev.parameters.json, staging.parameters.json, prod.parameters.json
+- **Deployment script** (deploy.ps1): PowerShell script with validation, what-if, and deployment
+- **Documentation** (infrastructure/README.md): Comprehensive guide with architecture, costs, troubleshooting
+
+**Resource Configuration:**
+- Dev: B1 App Service (~$13/mo), Free Static Web App, SQLite, ~$15-20/mo total
+- Staging: B2 App Service (~$54/mo), Standard Static Web App, SQLite, ~$70-75/mo total
+- Prod: P1v3 App Service (~$328/mo), Standard Static Web App, Azure SQL Basic, ~$355-365/mo total
+
+**Security Features:**
+- Managed identity for App Service → Key Vault access (no secrets in app settings)
+- RBAC authorization on Key Vault (Key Vault Secrets User role)
+- HTTPS enforcement, TLS 1.2 minimum, FTPS disabled
+- Soft delete and purge protection on Key Vault
+- Azure SQL accessible only from Azure services
+
+**Deployment Features:**
+- What-if mode for validation without creating resources
+- Outputs saved to outputs/{env}-outputs.json for GitHub secrets configuration
+- Unique resource naming using uniqueString() to avoid conflicts
+- Environment-specific SKUs and retention policies
+- Health check endpoints configured on App Service
+
+### Files changed
+- Created: infrastructure/main.bicep (main orchestration)
+- Created: infrastructure/modules/key-vault.bicep
+- Created: infrastructure/modules/app-service.bicep
+- Created: infrastructure/modules/static-web-app.bicep
+- Created: infrastructure/modules/monitoring.bicep
+- Created: infrastructure/modules/database.bicep
+- Created: infrastructure/parameters/dev.parameters.json
+- Created: infrastructure/parameters/staging.parameters.json
+- Created: infrastructure/parameters/prod.parameters.json
+- Created: infrastructure/deploy.ps1 (deployment script)
+- Created: infrastructure/README.md (comprehensive documentation)
+- Created: infrastructure/outputs/.gitignore (ignore deployment outputs)
+- Created: infrastructure/outputs/.gitkeep (track directory)
+
+### Learnings
+- Bicep targetScope 'subscription' allows creating resource groups in the same template
+- Conditional modules (if environmentName == 'prod') generate BCP318 warnings but work correctly at deployment
+- uniqueString(subscription().id, environmentName) ensures globally unique resource names
+- System-assigned managed identity + RBAC is more secure than Key Vault access policies
+- Static Web Apps Free tier sufficient for dev, Standard needed for custom domains (staging/prod)
+- App Service linuxFxVersion 'DOTNETCORE|10.0' for .NET 10 runtime
+- Azure SQL Basic tier (2GB) costs ~$5/mo, good starting point for production
+- SQLite suitable for dev/staging, allows fast iteration without Azure costs
+- Log Analytics workspace required for Application Insights (IngestionMode: 'LogAnalytics')
+- deploy.ps1 script provides friendly UX with colored output, validation, what-if support
+
+### Next steps
+- Deploy infrastructure to Azure: `.\infrastructure\deploy.ps1 -Environment dev -WhatIf`
+- Configure GitHub secrets from deployment outputs (see docs/ci-cd.md)
+- Issue #15: Create UI/UX wireframes and mockups (design frontend user interfaces)
+- Implement Entity Framework Core DbContext and migrations (Issue #3)
+- Implement REST API endpoints and gRPC services (Issue #1)
