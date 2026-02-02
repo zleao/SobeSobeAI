@@ -625,4 +625,45 @@ app.MapPost("/api/games/{id:guid}/leave", async (Guid id, HttpContext httpContex
 .RequireAuthorization()
 .WithName("LeaveGame");
 
+// Cancel Game endpoint (requires authentication, creator only)
+app.MapDelete("/api/games/{id:guid}", async (Guid id, HttpContext httpContext, ApplicationDbContext db) =>
+{
+    // Get user ID from JWT claims
+    var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+    if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    // Find game
+    var game = await db.Games
+        .Include(g => g.PlayerSessions)
+        .FirstOrDefaultAsync(g => g.Id == id);
+
+    if (game == null)
+    {
+        return Results.NotFound(new { error = "Game not found" });
+    }
+
+    // Check if user is the game creator
+    if (game.CreatedByUserId != userId)
+    {
+        return Results.StatusCode(403); // Forbidden
+    }
+
+    // Check if game has already started
+    if (game.Status != GameStatus.Waiting)
+    {
+        return Results.BadRequest(new { error = "Cannot cancel game that has already started" });
+    }
+
+    // Delete the game (cascading delete will remove player sessions)
+    db.Games.Remove(game);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new { message = "Game cancelled successfully" });
+})
+.RequireAuthorization()
+.WithName("CancelGame");
+
 app.Run();

@@ -1,3 +1,34 @@
+## 2026-02-02 - Issue #1: Backend Development - Cancel Game Endpoint Implementation
+
+### What was implemented
+- Implemented DELETE /api/games/{id} endpoint for canceling games before they start
+- Endpoint requires authentication (.RequireAuthorization())
+- Only allows game creator to cancel (returns 403 Forbidden for non-creators)
+- Validates game exists and is in Waiting status (cannot cancel started games)
+- Deletes the entire game including all player sessions (cascading delete)
+- Returns 200 OK with success message on successful cancellation
+- Error handling: 401 Unauthorized (no token), 404 Not Found (game not found), 403 Forbidden (not creator), 400 Bad Request (game already started)
+
+### Files changed
+- Modified: backend/SobeSobe.Api/Program.cs (added DELETE /api/games/{id} endpoint after leave game endpoint)
+
+### Learnings
+- Results.StatusCode(403) returns 403 Forbidden status code for authorization failures
+- EF Core Remove() on Game entity triggers cascading delete for related PlayerSessions
+- DELETE HTTP method follows RESTful conventions for resource deletion
+- Authorization checks: authentication (valid token) + ownership (creator only)
+- Game status validation prevents canceling in-progress games
+- Cascading delete configured in ApplicationDbContext removes child entities automatically
+- Minimal API .WithName() provides friendly name for OpenAPI documentation
+- Testing workflow: register → login (2 users) → create game (user 1) → join game (user 2) → try cancel as user 2 (403) → cancel as user 1 (200) → verify game deleted (404)
+
+### Next steps
+- Implement start game endpoint (POST /api/games/{id}/start) - transitions game to InProgress
+- Implement game action endpoints (trump selection, play decision, card exchange, play card)
+- Implement game state endpoint (GET /api/games/{id}/state)
+- Implement score history endpoint (GET /api/games/{id}/scores)
+- Add real-time notifications for game events (gRPC/SignalR)
+
 ## 2026-02-02 - Issue #1: Backend Development - Join Game Endpoint Implementation
 
 ### What was implemented
