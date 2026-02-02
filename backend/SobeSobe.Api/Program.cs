@@ -57,6 +57,7 @@ builder.Services.AddAuthorization();
 
 // Register services
 builder.Services.AddScoped<JwtTokenService>();
+builder.Services.AddScoped<TrickTakingService>();
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -1305,5 +1306,276 @@ app.MapPost("/api/games/{id:guid}/rounds/current/exchange-cards", async (Guid id
 })
 .RequireAuthorization()
 .WithName("ExchangeCards");
+
+// Play Card endpoint (requires authentication)
+app.MapPost("/api/games/{id:guid}/rounds/current/play-card", async (Guid id, PlayCardRequest request,
+    HttpContext httpContext, ApplicationDbContext db, TrickTakingService trickService) =>
+{
+    // Get user ID from JWT claims
+    var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+    if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    // Validate card
+    if (!request.Card.IsValid())
+    {
+        return Results.BadRequest(new { error = "Invalid card" });
+    }
+
+    // Find game with current round, player sessions, hands, and tricks
+    var game = await db.Games
+        .Include(g => g.PlayerSessions)
+            .ThenInclude(ps => ps.User)
+        .FirstOrDefaultAsync(g => g.Id == id);
+
+    if (game == null)
+    {
+        return Results.NotFound(new { error = "Game not found" });
+    }
+
+    // Get current round
+    var currentRound = await db.Rounds
+        .Include(r => r.Hands)
+        .Include(r => r.Tricks)
+        .OrderByDescending(r => r.RoundNumber)
+        .FirstOrDefaultAsync(r => r.GameId == id);
+
+    if (currentRound == null)
+    {
+        return Results.NotFound(new { error = "No active round found" });
+    }
+
+    // Validate round is in Playing or CardExchange phase
+    if (currentRound.Status != RoundStatus.Playing && currentRound.Status != RoundStatus.CardExchange)
+    {
+        return Results.Conflict(new { error = $"Round is not in playing phase (current status: {currentRound.Status})" });
+    }
+
+    // Auto-transition from CardExchange to Playing if needed
+    if (currentRound.Status == RoundStatus.CardExchange)
+    {
+        currentRound.Status = RoundStatus.Playing;
+    }
+
+    // Find player session
+    var playerSession = game.PlayerSessions.FirstOrDefault(ps => ps.UserId == userId && ps.IsActive);
+    if (playerSession == null)
+    {
+        return Results.NotFound(new { error = "Player not found in game" });
+    }
+
+    // Get player's hand
+    var hand = currentRound.Hands.FirstOrDefault(h => h.PlayerSessionId == playerSession.Id);
+    if (hand == null)
+    {
+        return Results.BadRequest(new { error = "Player is not playing this round" });
+    }
+
+    var playerHand = hand.Cards;
+
+    // Get or create current trick
+    var currentTrickNumber = currentRound.CurrentTrickNumber == 0 ? 1 : currentRound.CurrentTrickNumber;
+    var currentTrick = currentRound.Tricks.FirstOrDefault(t => t.TrickNumber == currentTrickNumber);
+
+    if (currentTrick == null)
+    {
+        // Create new trick - party player leads first trick
+        var partyPlayerSession = game.PlayerSessions.First(ps => ps.UserId == currentRound.PartyPlayerUserId);
+        currentTrick = new Trick
+        {
+            RoundId = currentRound.Id,
+            TrickNumber = currentTrickNumber,
+            LeadPlayerSessionId = currentTrickNumber == 1 ? partyPlayerSession.Id : currentRound.Tricks
+                .Where(t => t.TrickNumber == currentTrickNumber - 1)
+                .First().WinnerPlayerSessionId!.Value
+        };
+        db.Tricks.Add(currentTrick);
+        currentRound.CurrentTrickNumber = currentTrickNumber;
+    }
+
+    var cardsPlayed = currentTrick.CardsPlayed;
+
+    // Determine whose turn it is
+    var activePlayers = game.PlayerSessions
+        .Where(ps => currentRound.Hands.Any(h => h.PlayerSessionId == ps.Id))
+        .OrderBy(ps => ps.Position)
+        .ToList();
+
+    var expectedPlayerSessionId = currentTrick.LeadPlayerSessionId;
+    if (cardsPlayed.Count > 0)
+    {
+        var lastPlayerSessionId = cardsPlayed.Last().PlayerSessionId;
+        var lastPlayerPosition = activePlayers.First(p => p.Id == lastPlayerSessionId).Position;
+        var nextPosition = trickService.GetNextPlayerPosition(lastPlayerPosition, activePlayers.Select(p => p.Position).ToList());
+        expectedPlayerSessionId = activePlayers.First(p => p.Position == nextPosition).Id;
+    }
+
+    if (expectedPlayerSessionId != playerSession.Id)
+    {
+        return Results.Json(new { error = "Not your turn" }, statusCode: 403);
+    }
+
+    // Get Ace of trump for validation
+    var aceOfTrump = new Card { Rank = "Ace", Suit = currentRound.TrumpSuit.ToString() };
+
+    // Validate card play
+    var (isValid, errorMessage) = trickService.ValidateCardPlay(
+        request.Card, 
+        playerHand, 
+        cardsPlayed, 
+        currentRound.TrumpSuit, 
+        aceOfTrump);
+
+    if (!isValid)
+    {
+        return Results.BadRequest(new { error = errorMessage });
+    }
+
+    // Add card to trick
+    cardsPlayed.Add(new CardPlayed 
+    { 
+        PlayerSessionId = playerSession.Id, 
+        Card = request.Card 
+    });
+    currentTrick.CardsPlayed = cardsPlayed;
+
+    // Remove card from player's hand
+    playerHand.Remove(playerHand.First(c => c.Rank == request.Card.Rank && c.Suit == request.Card.Suit));
+    hand.CardsJson = JsonSerializer.Serialize(playerHand);
+
+    // Check if trick is completed (all active players have played)
+    var trickCompleted = cardsPlayed.Count == activePlayers.Count;
+
+    if (!trickCompleted)
+    {
+        // Trick not completed, return next player
+        await db.SaveChangesAsync();
+        var nextPosition = trickService.GetNextPlayerPosition(playerSession.Position, activePlayers.Select(p => p.Position).ToList());
+
+        return Results.Ok(new PlayCardResponse
+        {
+            RoundId = currentRound.Id,
+            TrickNumber = currentTrickNumber,
+            Card = request.Card,
+            TrickCompleted = false,
+            NextPlayerPosition = nextPosition,
+            Winner = null,
+            NextTrickLeader = null,
+            RoundCompleted = false,
+            Scores = null,
+            GameCompleted = false
+        });
+    }
+
+    // Trick completed - determine winner
+    var winnerSessionId = trickService.DetermineTrickWinner(cardsPlayed, currentRound.TrumpSuit);
+    currentTrick.WinnerPlayerSessionId = winnerSessionId;
+    currentTrick.CompletedAt = DateTime.UtcNow;
+
+    var winnerSession = activePlayers.First(p => p.Id == winnerSessionId);
+
+    // Check if round is completed (all 5 tricks played)
+    var roundCompleted = currentTrickNumber == 5;
+
+    if (!roundCompleted)
+    {
+        // Round continues - prepare for next trick
+        currentRound.CurrentTrickNumber++;
+        await db.SaveChangesAsync();
+
+        return Results.Ok(new PlayCardResponse
+        {
+            RoundId = currentRound.Id,
+            TrickNumber = currentTrickNumber,
+            Card = request.Card,
+            TrickCompleted = true,
+            NextPlayerPosition = null,
+            Winner = new TrickWinner
+            {
+                Position = winnerSession.Position,
+                UserId = winnerSession.UserId,
+                DisplayName = winnerSession.User!.DisplayName
+            },
+            NextTrickLeader = winnerSession.Position,
+            RoundCompleted = false,
+            Scores = null,
+            GameCompleted = false
+        });
+    }
+
+    // Round completed - calculate scores
+    currentRound.Status = RoundStatus.Completed;
+    currentRound.CompletedAt = DateTime.UtcNow;
+
+    var partyPlayerSessionId = game.PlayerSessions.First(ps => ps.UserId == currentRound.PartyPlayerUserId).Id;
+    var roundScores = trickService.CalculateRoundScores(
+        activePlayers,
+        currentRound.Tricks.ToList(),
+        currentRound.TrickValue,
+        partyPlayerSessionId);
+
+    // Update player points and create score history
+    var scoreResponses = new List<RoundScore>();
+    foreach (var (PlayerSessionId, TricksWon, PointsChange, Reason) in roundScores)
+    {
+        var player = activePlayers.First(p => p.Id == PlayerSessionId);
+        player.CurrentPoints += PointsChange;
+
+        var scoreHistory = new ScoreHistory
+        {
+            GameId = game.Id,
+            PlayerSessionId = PlayerSessionId,
+            RoundId = currentRound.Id,
+            PointsChange = PointsChange,
+            PointsAfter = player.CurrentPoints,
+            Reason = Reason,
+            CreatedAt = DateTime.UtcNow
+        };
+        db.ScoreHistories.Add(scoreHistory);
+
+        scoreResponses.Add(new RoundScore
+        {
+            Position = player.Position,
+            PointsChange = PointsChange,
+            PointsAfter = player.CurrentPoints,
+            TricksWon = TricksWon,
+            Penalty = Reason == ScoreReason.NoTricksNormalPenalty || Reason == ScoreReason.NoTricksPartyPenalty,
+            IsPartyPlayer = PlayerSessionId == partyPlayerSessionId
+        });
+    }
+
+    // Check if game is completed
+    var gameCompleted = trickService.IsGameComplete(game.PlayerSessions.ToList());
+    if (gameCompleted)
+    {
+        game.Status = GameStatus.Completed;
+        game.CompletedAt = DateTime.UtcNow;
+    }
+
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new PlayCardResponse
+    {
+        RoundId = currentRound.Id,
+        TrickNumber = currentTrickNumber,
+        Card = request.Card,
+        TrickCompleted = true,
+        NextPlayerPosition = null,
+        Winner = new TrickWinner
+        {
+            Position = winnerSession.Position,
+            UserId = winnerSession.UserId,
+            DisplayName = winnerSession.User!.DisplayName
+        },
+        NextTrickLeader = null,
+        RoundCompleted = true,
+        Scores = scoreResponses,
+        GameCompleted = gameCompleted
+    });
+})
+.RequireAuthorization()
+.WithName("PlayCard");
 
 app.Run();

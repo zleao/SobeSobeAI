@@ -1022,3 +1022,77 @@
 - Implement play card endpoint (POST /api/games/{id}/rounds/current/play-card)
 - Implement get game state endpoint (GET /api/games/{id}/state)
 - Add real-time notifications for game events (gRPC/SignalR)
+## 2026-02-02 - Issue #1: Backend Development - Play Card Endpoint Implementation
+
+### What was implemented
+- Implemented POST /api/games/{id}/rounds/current/play-card endpoint for trick-taking phase
+- Created PlayCardRequest and PlayCardResponse DTOs with TrickWinner and RoundScore nested types
+- Created TrickTakingService with comprehensive game logic:
+  - ValidateCardPlay: Enforces follow suit, trump escalation, mandatory Ace of trump, and cortar (cutting) rules
+  - DetermineTrickWinner: Identifies trick winner based on highest trump or highest card of lead suit
+  - GetNextPlayerPosition: Calculates next player in counter-clockwise order
+  - CalculateRoundScores: Computes point changes, penalties, and handles party player double penalties
+  - IsGameComplete: Checks win condition (any player ≤ 0 points)
+- Endpoint requires authentication (.RequireAuthorization())
+- Auto-transitions from CardExchange to Playing phase when first card is played
+- Validates all trick-taking rules from game rules documentation:
+  - Card must be in player's hand (400 Bad Request)
+  - Must follow suit if able (400 Bad Request)
+  - Must play trump (cortar) when cannot follow suit and have trump (400 Bad Request)
+  - Trump escalation: must play higher trump when trump is led (400 Bad Request)
+  - Mandatory Ace of trump when leading or cutting (400 Bad Request)
+  - Only current player can play (403 Forbidden)
+- Trick management:
+  - Creates Trick entity for each of 5 tricks in a round
+  - Tracks cards played in JSON (PlayerSessionId + Card)
+  - Party player leads first trick, subsequent tricks led by previous winner
+  - Determines trick winner and sets WinnerPlayerSessionId
+- Round completion (after 5 tricks):
+  - Calculates scores based on tricks won × trick value
+  - Applies penalties for zero tricks (5/10/20 points based on trick value)
+  - Party player penalty is doubled
+  - Updates PlayerSession.CurrentPoints
+  - Creates ScoreHistory records with proper ScoreReason (TricksWon, NoTricksNormalPenalty, NoTricksPartyPenalty)
+  - Transitions round to Completed status
+- Game completion:
+  - Checks if any player has ≤ 0 points
+  - Sets Game status to Completed
+- Response includes:
+  - Trick progress (trickNumber, trickCompleted, nextPlayerPosition)
+  - Trick winner details (position, userId, displayName)
+  - Round completion with scores (pointsChange, pointsAfter, tricksWon, penalty flag, isPartyPlayer flag)
+  - Game completion flag
+- Error handling: 401 Unauthorized, 404 Not Found (game/round/player/hand), 400 Bad Request (validation), 403 Forbidden (not your turn), 409 Conflict (wrong phase)
+
+### Files changed
+- Created: backend/SobeSobe.Api/DTOs/PlayCardRequest.cs (card to play)
+- Created: backend/SobeSobe.Api/DTOs/PlayCardResponse.cs (trick state, winner, scores, completion flags)
+- Created: backend/SobeSobe.Api/Services/TrickTakingService.cs (comprehensive game logic service, 200+ lines)
+- Modified: backend/SobeSobe.Api/Program.cs (added POST /api/games/{id}/rounds/current/play-card endpoint, registered TrickTakingService)
+
+### Learnings
+- Trick-taking validation is complex with multiple interdependent rules (follow suit, trump, Ace of trump)
+- Lead suit determines whether players must follow or can cut with trump
+- Trump escalation rule applies only when trump is led (must play higher trump if able)
+- Mandatory Ace of trump applies when leading or cutting, but NOT when following suit
+- Card validation must check: in hand → can follow suit → must trump → trump escalation → Ace of trump
+- GetRankValue() in Card value object provides numeric comparison for determining winners (Ace=10, 7=9, King=8, etc.)
+- Trick winner algorithm: highest trump wins, else highest card of lead suit
+- Party player determined from Round.PartyPlayerUserId, mapped to PlayerSession for score calculations
+- Penalty calculation: trick value 1→5 points, 2→10 points, 4→20 points; doubled for party player
+- ScoreReason enum has separate values for normal vs party player penalties (NoTricksNormalPenalty, NoTricksPartyPenalty)
+- ApplicationDbContext uses ScoreHistories (plural) DbSet, not ScoreHistory
+- Results.Json() allows returning custom status codes with JSON body (e.g., 403 Forbidden)
+- Counter-clockwise play order: OrderBy player positions, increment index with modulo wrap-around
+- Auto-transition from CardExchange to Playing ensures players can start playing immediately after exchanges
+- All 5 tricks tracked separately as Trick entities with winner and cards played
+- Round completion triggers score calculation, ScoreHistory creation, and Game completion check
+- Build succeeded, all tests pass
+
+### Next steps
+- Implement get game state endpoint (GET /api/games/{id}/state) - full game state for UI
+- Implement score history endpoint (GET /api/games/{id}/scores) - complete score history
+- Add real-time notifications for game events (gRPC/SignalR) - player joined, card played, trick completed, round completed
+- Consider adding endpoint to start new round after current round completes
+- Test complete game flow: register → login → create → join → start → select trump → deal → exchange → play all 5 tricks → verify scores
+
