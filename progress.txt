@@ -33,6 +33,44 @@
 - Implement start game endpoint (POST /api/games/{id}/start)
 - Implement game state machine for round and trick management
 
+## 2026-02-02 - Issue #1: Backend Development - List Games Endpoint Implementation
+
+### What was implemented
+- Implemented GET /api/games endpoint for listing available games with pagination and filtering
+- Created ListGamesResponse DTO with pagination metadata (page, pageSize, totalPages, totalItems)
+- Created GameListItem, UserSummary, PlayerSummary DTOs for clean response structure
+- Endpoint supports optional query parameters: status (filter by game status), createdBy (filter by creator), page (default 1), pageSize (default 20, max 100)
+- Uses EF Core Include() to eagerly load CreatedBy user and PlayerSessions with User navigation properties
+- Orders games by creation date (newest first) for consistent pagination
+- Returns games with full player list (username, displayName, position) ordered by position
+- Endpoint is public (no authentication required) to allow browsing available games
+- Tested successfully: pagination (page 1/2 with pageSize 2), filtering (status=0), total count calculations
+
+### Files changed
+- Created: backend/SobeSobe.Api/DTOs/ListGamesResponse.cs (response DTOs for list games endpoint)
+- Modified: backend/SobeSobe.Api/Program.cs (added GET /api/games endpoint before POST /api/games)
+
+### Learnings
+- EF Core Include() with ThenInclude() enables eager loading nested navigation properties (Game → PlayerSessions → User)
+- Query filters applied before pagination for accurate total count and page count calculations
+- Math.Ceiling() calculates total pages from total items and page size
+- Skip() and Take() implement offset-based pagination in EF Core
+- Validation: page < 1 defaults to 1, pageSize outside 1-100 range defaults to 20
+- OrderByDescending(g => g.CreatedAt) ensures consistent ordering across pagination (newest games first)
+- Public endpoint allows lobby browsing without authentication (join requires auth)
+- PlayerSessions.Count gives current player count efficiently
+- LINQ Select() projects Game entities to GameListItem DTOs with nested UserSummary and PlayerSummary objects
+- OrderBy(ps => ps.Position) ensures players listed in seat order (0, 1, 2, 3, 4)
+- Pagination metadata includes all information needed for UI pagination controls (current page, total pages, total items)
+
+### Next steps
+- Implement get game details endpoint (GET /api/games/{id})
+- Implement join game endpoint (POST /api/games/{id}/join)
+- Implement leave game endpoint (POST /api/games/{id}/leave)
+- Implement cancel game endpoint (DELETE /api/games/{id})
+- Implement start game endpoint (POST /api/games/{id}/start)
+- Implement game state machine for round and trick management
+
 ## 2026-02-02 - Issue #1: Backend Development - Get Current User Endpoint Implementation
 
 ### What was implemented

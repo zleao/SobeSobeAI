@@ -245,6 +245,92 @@ app.MapPost("/api/users/register", async (RegisterUserRequest request, Applicati
 .WithName("RegisterUser")
 .WithOpenApi();
 
+// List Games endpoint (public)
+app.MapGet("/api/games", async (
+    ApplicationDbContext db,
+    int? status,
+    Guid? createdBy,
+    int page = 1,
+    int pageSize = 20) =>
+{
+    // Validate pagination parameters
+    if (page < 1) page = 1;
+    if (pageSize < 1 || pageSize > 100) pageSize = 20;
+
+    // Build query
+    var query = db.Games
+        .Include(g => g.CreatedBy)
+        .Include(g => g.PlayerSessions)
+            .ThenInclude(ps => ps.User)
+        .AsQueryable();
+
+    // Apply filters
+    if (status.HasValue)
+    {
+        query = query.Where(g => (int)g.Status == status.Value);
+    }
+
+    if (createdBy.HasValue)
+    {
+        query = query.Where(g => g.CreatedByUserId == createdBy.Value);
+    }
+
+    // Order by creation date (newest first)
+    query = query.OrderByDescending(g => g.CreatedAt);
+
+    // Get total count
+    var totalItems = await query.CountAsync();
+    var totalPages = (int)Math.Ceiling(totalItems / (double)pageSize);
+
+    // Apply pagination
+    var games = await query
+        .Skip((page - 1) * pageSize)
+        .Take(pageSize)
+        .ToListAsync();
+
+    // Map to response
+    var gameListItems = games.Select(g => new GameListItem
+    {
+        Id = g.Id,
+        CreatedBy = new UserSummary
+        {
+            Id = g.CreatedBy.Id,
+            Username = g.CreatedBy.Username,
+            DisplayName = g.CreatedBy.DisplayName
+        },
+        Status = (int)g.Status,
+        MaxPlayers = g.MaxPlayers,
+        CurrentPlayers = g.PlayerSessions.Count,
+        Players = g.PlayerSessions
+            .OrderBy(ps => ps.Position)
+            .Select(ps => new PlayerSummary
+            {
+                UserId = ps.User.Id,
+                Username = ps.User.Username,
+                DisplayName = ps.User.DisplayName,
+                Position = ps.Position
+            })
+            .ToList(),
+        CreatedAt = g.CreatedAt
+    }).ToList();
+
+    var response = new ListGamesResponse
+    {
+        Games = gameListItems,
+        Pagination = new PaginationInfo
+        {
+            Page = page,
+            PageSize = pageSize,
+            TotalPages = totalPages,
+            TotalItems = totalItems
+        }
+    };
+
+    return Results.Ok(response);
+})
+.WithName("ListGames")
+.WithOpenApi();
+
 // Create Game endpoint (requires authentication)
 app.MapPost("/api/games", async (CreateGameRequest request, HttpContext httpContext, ApplicationDbContext db) =>
 {
