@@ -4,6 +4,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using SobeSobe.Infrastructure.Data;
 using SobeSobe.Api.DTOs;
+using SobeSobe.Api.Options;
 using SobeSobe.Api.Services;
 using SobeSobe.Core.Entities;
 using SobeSobe.Core.Enums;
@@ -18,6 +19,16 @@ builder.AddServiceDefaults();
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=sobesobe.db"));
 
+// Configure JWT options
+var jwtOptionsSection = builder.Configuration.GetSection(JwtOptions.SectionName);
+var jwtOptions = jwtOptionsSection.Get<JwtOptions>() ?? throw new InvalidOperationException("JWT configuration section is missing");
+
+builder.Services
+    .AddOptions<JwtOptions>()
+    .Bind(jwtOptionsSection)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
 // Add JWT authentication
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -28,14 +39,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"],
-            ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT secret not configured"))),
+            ValidIssuer = jwtOptions.Issuer,
+            ValidAudience = jwtOptions.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Secret)),
             // Map inbound claims to original JWT claim names
             NameClaimType = System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.UniqueName,
             RoleClaimType = "role"
         };
-        
+
         // Don't map claims automatically
         options.MapInboundClaims = false;
     });
@@ -75,13 +86,13 @@ app.MapPost("/api/auth/login", async (LoginRequest request, ApplicationDbContext
 
     if (user == null)
     {
-        return Results.BadRequest(new { error = "Invalid username/email or password" });
+        return Results.Unauthorized();
     }
 
     // Verify password
     if (!PasswordHasher.VerifyPassword(request.Password, user.PasswordHash))
     {
-        return Results.BadRequest(new { error = "Invalid username/email or password" });
+        return Results.Unauthorized();
     }
 
     // Update last login timestamp
@@ -124,7 +135,7 @@ app.MapPost("/api/auth/refresh", async (RefreshTokenRequest request, JwtTokenSer
     
     if (refreshToken == null)
     {
-        return Results.BadRequest(new { error = "Invalid or expired refresh token" });
+        return Results.Unauthorized();
     }
 
     // Revoke old refresh token

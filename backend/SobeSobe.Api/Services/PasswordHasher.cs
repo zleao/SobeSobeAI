@@ -3,7 +3,7 @@ using System.Text;
 
 namespace SobeSobe.Api.Services;
 
-public class PasswordHasher
+public static class PasswordHasher
 {
     private const int SaltSize = 16;
     private const int HashSize = 32;
@@ -34,11 +34,24 @@ public class PasswordHasher
     public static bool VerifyPassword(string password, string passwordHash)
     {
         // Convert from base64
-        var hashBytes = Convert.FromBase64String(passwordHash);
+        byte[] hashBytes;
+
+        try
+        {
+            hashBytes = Convert.FromBase64String(passwordHash);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+
+        if (hashBytes.Length != SaltSize + HashSize)
+        {
+            return false;
+        }
 
         // Extract salt
-        var salt = new byte[SaltSize];
-        Array.Copy(hashBytes, 0, salt, 0, SaltSize);
+        var salt = hashBytes.AsSpan(0, SaltSize);
 
         // Compute hash of provided password
         var hash = Rfc2898DeriveBytes.Pbkdf2(
@@ -48,15 +61,8 @@ public class PasswordHasher
             HashAlgorithmName.SHA256,
             HashSize);
 
-        // Compare hashes
-        for (int i = 0; i < HashSize; i++)
-        {
-            if (hashBytes[i + SaltSize] != hash[i])
-            {
-                return false;
-            }
-        }
-
-        return true;
+        // Compare hashes in constant time
+        var expectedHash = hashBytes.AsSpan(SaltSize, HashSize);
+        return CryptographicOperations.FixedTimeEquals(expectedHash, hash);
     }
 }

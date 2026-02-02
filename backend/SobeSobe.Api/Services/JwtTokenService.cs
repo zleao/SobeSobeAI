@@ -3,6 +3,8 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Options;
+using SobeSobe.Api.Options;
 using SobeSobe.Core.Entities;
 using SobeSobe.Infrastructure.Data;
 
@@ -10,18 +12,18 @@ namespace SobeSobe.Api.Services;
 
 public class JwtTokenService
 {
-    private readonly IConfiguration _configuration;
+    private readonly JwtOptions _options;
     private readonly ApplicationDbContext _dbContext;
 
-    public JwtTokenService(IConfiguration configuration, ApplicationDbContext dbContext)
+    public JwtTokenService(IOptions<JwtOptions> options, ApplicationDbContext dbContext)
     {
-        _configuration = configuration;
+        _options = options.Value;
         _dbContext = dbContext;
     }
 
     public string GenerateAccessToken(Guid userId, string username, string email)
     {
-        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT secret not configured")));
+        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.Secret));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
         var claims = new[]
@@ -33,10 +35,10 @@ public class JwtTokenService
         };
 
         var token = new JwtSecurityToken(
-            issuer: _configuration["Jwt:Issuer"],
-            audience: _configuration["Jwt:Audience"],
+            issuer: _options.Issuer,
+            audience: _options.Audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(15), // 15 minute access token
+            expires: DateTime.UtcNow.AddMinutes(_options.AccessTokenMinutes),
             signingCredentials: credentials
         );
 
@@ -46,12 +48,7 @@ public class JwtTokenService
     public async Task<string> GenerateAndStoreRefreshTokenAsync(Guid userId)
     {
         // Generate a crypto-secure random refresh token
-        var bytes = new byte[32];
-        using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
-        {
-            rng.GetBytes(bytes);
-        }
-        var token = Convert.ToBase64String(bytes);
+        var token = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
 
         // Store refresh token in database
         var refreshToken = new RefreshToken
@@ -59,7 +56,7 @@ public class JwtTokenService
             Id = Guid.NewGuid(),
             UserId = userId,
             Token = token,
-            ExpiresAt = DateTime.UtcNow.AddDays(7), // 7 day refresh token
+            ExpiresAt = DateTime.UtcNow.AddDays(_options.RefreshTokenDays),
             CreatedAt = DateTime.UtcNow
         };
 
