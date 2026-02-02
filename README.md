@@ -1,5 +1,9 @@
 # SobeSobe Multiplayer Card Game
 
+[![Frontend CI](https://github.com/zleao/SobeSobeAI/actions/workflows/frontend-ci.yml/badge.svg)](https://github.com/zleao/SobeSobeAI/actions/workflows/frontend-ci.yml)
+[![Backend CI](https://github.com/zleao/SobeSobeAI/actions/workflows/backend-ci.yml/badge.svg)](https://github.com/zleao/SobeSobeAI/actions/workflows/backend-ci.yml)
+[![Deploy to Azure](https://github.com/zleao/SobeSobeAI/actions/workflows/deploy-azure.yml/badge.svg)](https://github.com/zleao/SobeSobeAI/actions/workflows/deploy-azure.yml)
+
 A real-time multiplayer implementation of the traditional Portuguese card game "Sobe Sobe" built with modern web technologies.
 
 ## 🎮 About the Game

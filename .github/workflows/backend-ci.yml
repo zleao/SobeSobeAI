@@ -1,0 +1,61 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+
+jobs:
+  backend-build-test:
+    runs-on: ubuntu-latest
+    
+    defaults:
+      run:
+        working-directory: ./backend
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      
+      - name: Restore NuGet packages
+        run: dotnet restore
+      
+      - name: Run .NET format check
+        run: dotnet format --verify-no-changes --verbosity diagnostic
+        continue-on-error: true
+      
+      - name: Build solution
+        run: dotnet build --configuration Release --no-restore
+      
+      - name: Run unit tests
+        run: dotnet test --configuration Release --no-build --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./TestResults
+      
+      - name: Generate code coverage report
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./backend/TestResults/**/coverage.cobertura.xml
+          flags: backend
+          name: backend-coverage
+        continue-on-error: true
+      
+      - name: Publish API
+        run: dotnet publish SobeSobe.Api/SobeSobe.Api.csproj --configuration Release --no-build --output ./publish
+      
+      - name: Upload publish artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-publish
+          path: backend/publish
+          retention-days: 7

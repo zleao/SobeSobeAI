@@ -226,3 +226,72 @@
 - Implement gRPC service in SobeSobe.Api with Grpc.AspNetCore
 - Create DTO classes for request/response models
 - Implement JWT authentication with ASP.NET Core Identity
+
+## 2026-02-02 - Issue #14: Configure GitHub Actions for CI/CD
+
+### What was implemented
+- Created comprehensive GitHub Actions CI/CD pipeline with 3 workflows
+- **Frontend CI** (.github/workflows/frontend-ci.yml):
+  - Runs on push/PR to main/develop when frontend code changes
+  - Installs Node.js 20, runs ESLint, Prettier, builds Angular app
+  - Executes unit tests with code coverage (Karma/Jasmine)
+  - Uploads coverage to Codecov
+  - Builds production bundle and uploads artifacts (7-day retention)
+- **Backend CI** (.github/workflows/backend-ci.yml):
+  - Runs on push/PR to main/develop when backend code changes
+  - Sets up .NET 10 SDK, restores NuGet packages
+  - Runs dotnet format check, builds solution in Release mode
+  - Executes unit tests with XPlat Code Coverage
+  - Uploads coverage to Codecov
+  - Publishes API and uploads artifacts (7-day retention)
+- **Deploy to Azure** (.github/workflows/deploy-azure.yml):
+  - Runs on push to main or manual trigger
+  - Builds frontend and backend independently
+  - Deploys frontend to Azure Static Web Apps
+  - Deploys backend to Azure App Service
+  - Runs smoke tests for both frontend and backend health endpoints
+- Updated rontend/package.json with 	est:ci and lint scripts
+- Added CI/CD status badges to README.md
+- Created comprehensive CI/CD documentation (docs/ci-cd.md) with:
+  - Workflow descriptions, triggers, and requirements
+  - GitHub secrets configuration guide
+  - Branch protection rules recommendations
+  - Code quality checks configuration
+  - Troubleshooting guide for common CI/CD issues
+  - Future enhancement roadmap
+
+**CI/CD Architecture:**
+- Path-based triggers: frontend and backend CI only run when respective code changes
+- Artifact-based deployment: Build once, deploy multiple environments
+- Smoke tests: Automated health checks after deployment
+- Code coverage reporting: Integrated with Codecov for coverage tracking
+- Branch protection: Enforces status checks before merging to main
+
+### Files changed
+- Created: .github/workflows/frontend-ci.yml (frontend build, lint, test pipeline)
+- Created: .github/workflows/backend-ci.yml (backend build, test pipeline)
+- Created: .github/workflows/deploy-azure.yml (Azure deployment pipeline)
+- Modified: frontend/package.json (added test:ci and lint scripts)
+- Modified: README.md (added CI/CD status badges)
+- Created: docs/ci-cd.md (comprehensive CI/CD documentation)
+
+### Learnings
+- GitHub Actions path filters optimize CI runs by only triggering when relevant code changes
+- Artifacts with 7-day retention provide debugging capability without long-term storage costs
+- dotnet format with --verify-no-changes enforces consistent code style in CI
+- Angular test:ci script needs --watch=false and --browsers=ChromeHeadless for CI environments
+- Codecov action works with both frontend (lcov.info) and backend (coverage.cobertura.xml) formats
+- Smoke tests should run after deployment to catch issues before users encounter them
+- Branch protection rules prevent merging without passing status checks
+- Azure Static Web Apps deployment uses API token, App Service uses service principal credentials
+- continue-on-error: true allows workflows to report issues without blocking (ESLint, Prettier)
+- Workflow artifacts enable manual testing and rollback scenarios
+
+### Next steps
+- Configure GitHub secrets (AZURE_STATIC_WEB_APPS_API_TOKEN, AZURE_CREDENTIALS, CODECOV_TOKEN)
+- Enable branch protection rules on main branch
+- Issue #10: Create Azure infrastructure with Bicep (provision Azure resources for deployment)
+- Issue #15: Create UI/UX wireframes and mockups (design frontend user interfaces)
+- Add integration tests to CI pipeline
+- Configure Dependabot for automated security updates
+- Add CodeQL security scanning
