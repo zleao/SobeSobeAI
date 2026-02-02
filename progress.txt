@@ -1,3 +1,37 @@
+## 2026-02-02 - Issue #1: Backend Development - Join Game Endpoint Implementation
+
+### What was implemented
+- Implemented POST /api/games/{id}/join endpoint for joining existing games
+- Endpoint requires authentication (.RequireAuthorization())
+- Validates game exists and is in Waiting status (cannot join started games)
+- Checks if user is already in the game (returns 409 Conflict)
+- Checks if game is full (returns 400 Bad Request)
+- Automatically assigns next available position (0-4)
+- Creates PlayerSession with 20 starting points for joining user
+- Returns join response with gameId and full PlayerSession details
+- Tested successfully: create game → join game → verify duplicate join (409) → verify full game (400)
+
+### Files changed
+- Modified: backend/SobeSobe.Api/Program.cs (added POST /api/games/{id}/join endpoint)
+
+### Learnings
+- Results.Conflict() returns 409 status code for duplicate resource operations
+- HashSet<int> efficient for checking occupied positions in small collections
+- EF Core Include() loads navigation properties needed for validation (PlayerSessions)
+- Next available position algorithm: iterate 0-4 until finding unoccupied position
+- Game status check prevents joining games that have already started
+- PlayerSession created with same pattern as game creator (20 points, IsActive=true)
+- JoinedAt timestamp tracks when each player joined the game
+- Position assignment maintains seat order for game flow (dealer rotation)
+- Error handling: 401 Unauthorized (no token), 404 Not Found (user/game), 409 Conflict (already joined), 400 Bad Request (game full or started)
+- Testing workflow: register → login → create game (user 2) → join game (user 3) → verify game has 2 players → test duplicate join → test full game
+
+### Next steps
+- Implement leave game endpoint (POST /api/games/{id}/leave)
+- Implement cancel game endpoint (DELETE /api/games/{id})
+- Implement start game endpoint (POST /api/games/{id}/start)
+- Implement game state machine for round and trick management
+- Add real-time notifications for game events (gRPC/SignalR)
 ## 2026-02-02 - Issue #1: Backend Development - Get Game Details Endpoint Implementation
 
 ### What was implemented
@@ -692,3 +726,4 @@
 - Add integration tests for user registration endpoint
 - Implement remaining user management endpoints (get profile, update profile, get statistics)
 - Start implementing game management endpoints (create game, join game, list games)
+

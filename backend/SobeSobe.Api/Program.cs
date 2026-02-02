@@ -471,4 +471,96 @@ app.MapPost("/api/games", async (CreateGameRequest request, HttpContext httpCont
 .RequireAuthorization()
 .WithName("CreateGame");
 
+// Join Game endpoint (requires authentication)
+app.MapPost("/api/games/{id:guid}/join", async (Guid id, HttpContext httpContext, ApplicationDbContext db) =>
+{
+    // Get user ID from JWT claims
+    var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+    if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    // Verify user exists
+    var user = await db.Users.FindAsync(userId);
+    if (user == null)
+    {
+        return Results.NotFound(new { error = "User not found" });
+    }
+
+    // Find the game with player sessions
+    var game = await db.Games
+        .Include(g => g.PlayerSessions)
+        .FirstOrDefaultAsync(g => g.Id == id);
+
+    if (game == null)
+    {
+        return Results.NotFound(new { error = "Game not found" });
+    }
+
+    // Check if game has already started
+    if (game.Status != GameStatus.Waiting)
+    {
+        return Results.BadRequest(new { error = "Game has already started" });
+    }
+
+    // Check if user is already in this game
+    if (game.PlayerSessions.Any(ps => ps.UserId == userId))
+    {
+        return Results.Conflict(new { error = "User already in this game" });
+    }
+
+    // Check if game is full
+    if (game.PlayerSessions.Count >= game.MaxPlayers)
+    {
+        return Results.BadRequest(new { error = "Game is full" });
+    }
+
+    // Find next available position
+    var occupiedPositions = game.PlayerSessions.Select(ps => ps.Position).ToHashSet();
+    int nextPosition = 0;
+    while (occupiedPositions.Contains(nextPosition))
+    {
+        nextPosition++;
+    }
+
+    // Create player session for joining user
+    var playerSession = new PlayerSession
+    {
+        GameId = game.Id,
+        UserId = userId,
+        Position = nextPosition,
+        CurrentPoints = 20, // Starting points
+        IsActive = true,
+        ConsecutiveRoundsOut = 0,
+        JoinedAt = DateTime.UtcNow
+    };
+
+    db.PlayerSessions.Add(playerSession);
+    await db.SaveChangesAsync();
+
+    // Return join response
+    var joinResponse = new
+    {
+        GameId = game.Id,
+        PlayerSession = new PlayerSessionResponse
+        {
+            Id = playerSession.Id,
+            UserId = user.Id,
+            Username = user.Username,
+            DisplayName = user.DisplayName,
+            AvatarUrl = user.AvatarUrl,
+            Position = playerSession.Position,
+            CurrentPoints = playerSession.CurrentPoints,
+            IsActive = playerSession.IsActive,
+            ConsecutiveRoundsOut = playerSession.ConsecutiveRoundsOut,
+            JoinedAt = playerSession.JoinedAt
+        }
+    };
+
+    return Results.Ok(joinResponse);
+})
+.RequireAuthorization()
+.WithName("JoinGame");
+
 app.Run();
