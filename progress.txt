@@ -363,3 +363,48 @@
 - Issue #15: Create UI/UX wireframes and mockups (design frontend user interfaces)
 - Implement Entity Framework Core DbContext and migrations (Issue #3)
 - Implement REST API endpoints and gRPC services (Issue #1)
+
+## 2026-02-02 - Issue #3: Database and Persistence - Initial EF Core Setup
+
+### What was implemented
+- Created ApplicationDbContext with DbSet properties for all 7 entities (User, Game, Round, PlayerSession, Hand, Trick, ScoreHistory)
+- Configured entity relationships with OnModelCreating: defined foreign keys, navigation properties, and cascade behaviors
+- Added EF Core packages: Microsoft.EntityFrameworkCore.Sqlite (10.0.2) and Microsoft.EntityFrameworkCore.Design (10.0.2)
+- Configured DbContext in SobeSobe.Api with SQLite connection string (Data Source=sobesobe.db)
+- Created initial EF Core migration '20260202132251_InitialCreate' with all tables, indexes, and constraints
+- Applied migration successfully - database created with 7 tables and 19 indexes
+- Verified all builds and tests pass
+
+### Files changed
+- Created: backend/SobeSobe.Infrastructure/Data/ApplicationDbContext.cs (198 lines, complete DbContext with entity configurations)
+- Created: backend/SobeSobe.Infrastructure/Data/Migrations/20260202132251_InitialCreate.cs (EF Core migration)
+- Created: backend/SobeSobe.Infrastructure/Data/Migrations/20260202132251_InitialCreate.Designer.cs
+- Created: backend/SobeSobe.Infrastructure/Data/Migrations/ApplicationDbContextModelSnapshot.cs
+- Modified: backend/SobeSobe.Infrastructure/SobeSobe.Infrastructure.csproj (added EF Core packages and Core project reference)
+- Modified: backend/SobeSobe.Api/SobeSobe.Api.csproj (added Microsoft.EntityFrameworkCore.Design package)
+- Modified: backend/SobeSobe.Api/Program.cs (registered ApplicationDbContext with dependency injection)
+- Modified: backend/SobeSobe.Api/appsettings.json (added DefaultConnection connection string)
+- Deleted: backend/SobeSobe.Infrastructure/Class1.cs (placeholder file)
+- Created: backend/SobeSobe.Api/sobesobe.db (SQLite database file, 176KB)
+
+### Learnings
+- EF Core 10.0.2 is the latest version compatible with .NET 10 SDK
+- DbContext registration in Program.cs uses builder.Services.AddDbContext<ApplicationDbContext>() with UseSqlite()
+- Entity navigation property names must match exactly in DbContext configuration (e.g., CreatedGames vs GamesCreated)
+- JSON columns in SQLite use HasColumnName() to map JSON properties (CardsJson → ""Cards"" column)
+- entity.Ignore() used for computed/unmapped properties (Cards list from CardsJson)
+- Composite indexes created with HasIndex(e => new { e.Property1, e.Property2 })
+- Unique constraints enforced with IsUnique() on indexes
+- CASCADE delete for child entities (PlayerSessions, Hands, Tricks, ScoreHistory)
+- RESTRICT delete for reference entities (User references from Round dealer/party player)
+- SQLite WAL mode enabled automatically by EF Core for better concurrency
+- Migration created from Infrastructure project with --output-dir Data/Migrations
+- Database update applies all pending migrations and creates __EFMigrationsHistory table
+- All 19 indexes created successfully for optimizing common query patterns
+
+### Next steps
+- Implement repository interfaces and patterns in SobeSobe.Infrastructure
+- Create unit tests for ApplicationDbContext and entity validation
+- Implement game logic service layer in SobeSobe.Core
+- Start implementing REST API endpoints for authentication and game management (Issue #1)
+- Integrate ApplicationDbContext with Aspire orchestration for dev workflow
