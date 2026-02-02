@@ -1,3 +1,44 @@
+## 2026-02-02 - Issue #1: Backend Development - Score History Endpoint Implementation
+
+### What was implemented
+- Implemented GET /api/games/{id}/scores endpoint for retrieving complete score history
+- Created ScoreHistoryResponse and ScoreEntry DTOs
+- Endpoint requires authentication (.RequireAuthorization())
+- Only players who have joined the game can view score history (403 Forbidden for non-players)
+- Returns all score entries for the game ordered chronologically
+- Includes comprehensive score details:
+  - Player information (position, username, display name)
+  - Round information (round ID, round number)
+  - Points change (can be negative for penalties)
+  - Points after change
+  - Reason (GameStart, TricksWon, NoTricksNormalPenalty, NoTricksPartyPenalty)
+  - Timestamp
+- Eager loads PlayerSession with User and Round for efficient querying
+- Handles nullable Round (for GameStart entries which don't have a round)
+- Error handling: 401 Unauthorized, 404 Not Found (user/game), 403 Forbidden (not a player)
+
+### Files changed
+- Created: backend/SobeSobe.Api/DTOs/ScoreHistoryResponse.cs (score history and score entry DTOs)
+- Modified: backend/SobeSobe.Api/Program.cs (added GET /api/games/{id}/scores endpoint)
+
+### Learnings
+- Score history provides complete audit trail of all point changes throughout the game
+- ScoreReason enum distinguishes between different types of score changes (tricks won vs penalties)
+- Nullable Round field handles GameStart entries which initialize player points before first round
+- EF Core Include() with ThenInclude() loads nested navigation properties efficiently
+- Null-forgiving operators (!) needed for navigation properties loaded with Include/ThenInclude
+- Chronological ordering by CreatedAt timestamp ensures scores displayed in correct sequence
+- PlayerSession.User navigation property is nullable in entity, but guaranteed non-null when loaded with Include
+- Score history endpoint critical for frontend to display detailed scoring breakdown and game progression
+- Testing workflow: register → login → create → join → start → play round → get scores → verify all entries
+
+### Next steps
+- Implement real-time notifications for game events (gRPC/SignalR) - player joined, card played, trick completed
+- Consider implementing endpoint to start new round after previous round completes
+- Add unit tests for all game endpoints (registration through score history)
+- Add integration tests for complete game flow
+- Test complete game with multiple rounds to verify score accumulation
+
 ## 2026-02-02 - Issue #1: Backend Development - Get Game State Endpoint Implementation
 
 ### What was implemented

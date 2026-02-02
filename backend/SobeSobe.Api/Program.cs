@@ -1716,4 +1716,70 @@ app.MapGet("/api/games/{id:guid}/state", async (Guid id, HttpContext httpContext
 .RequireAuthorization()
 .WithName("GetGameState");
 
+// Get Score History endpoint (requires authentication)
+app.MapGet("/api/games/{id:guid}/scores", async (Guid id, HttpContext httpContext, ApplicationDbContext db) =>
+{
+    // Get user ID from JWT claims
+    var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+    if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    // Verify user exists
+    var user = await db.Users.FindAsync(userId);
+    if (user == null)
+    {
+        return Results.NotFound(new { error = "User not found" });
+    }
+
+    // Find the game
+    var game = await db.Games
+        .Include(g => g.PlayerSessions)
+        .FirstOrDefaultAsync(g => g.Id == id);
+
+    if (game == null)
+    {
+        return Results.NotFound(new { error = "Game not found" });
+    }
+
+    // Verify requesting user is a player in the game
+    var requestingPlayerSession = game.PlayerSessions.FirstOrDefault(ps => ps.UserId == userId);
+    if (requestingPlayerSession == null)
+    {
+        return Results.Json(new { error = "You are not a player in this game" }, statusCode: 403);
+    }
+
+    // Get all score history for this game, ordered chronologically
+    var scoreHistory = await db.ScoreHistories
+        .Include(sh => sh.PlayerSession)
+            .ThenInclude(ps => ps.User)
+        .Include(sh => sh.Round)
+        .Where(sh => sh.GameId == id)
+        .OrderBy(sh => sh.CreatedAt)
+        .Select(sh => new ScoreEntry
+        {
+            Id = sh.Id,
+            GameId = sh.GameId,
+            PlayerSessionId = sh.PlayerSessionId,
+            PlayerPosition = sh.PlayerSession!.Position,
+            PlayerUsername = sh.PlayerSession!.User!.Username,
+            PlayerDisplayName = sh.PlayerSession!.User!.DisplayName,
+            RoundId = sh.RoundId,
+            RoundNumber = sh.Round != null ? sh.Round.RoundNumber : null,
+            PointsChange = sh.PointsChange,
+            PointsAfter = sh.PointsAfter,
+            Reason = sh.Reason,
+            CreatedAt = sh.CreatedAt
+        })
+        .ToListAsync();
+
+    return Results.Ok(new ScoreHistoryResponse
+    {
+        Scores = scoreHistory
+    });
+})
+.RequireAuthorization()
+.WithName("GetScoreHistory");
+
 app.Run();
