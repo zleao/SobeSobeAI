@@ -140,6 +140,17 @@ app.MapPost("/api/auth/refresh", async (RefreshTokenRequest request, JwtTokenSer
 .WithName("RefreshToken")
 .WithOpenApi();
 
+// Logout endpoint
+app.MapPost("/api/auth/logout", async (LogoutRequest request, JwtTokenService jwtService) =>
+{
+    // Revoke the refresh token
+    await jwtService.RevokeRefreshTokenAsync(request.RefreshToken);
+
+    return Results.Ok(new { message = "Logged out successfully" });
+})
+.WithName("Logout")
+.WithOpenApi();
+
 // User Registration endpoint
 app.MapPost("/api/users/register", async (RegisterUserRequest request, ApplicationDbContext db) =>
 {

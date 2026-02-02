@@ -1,3 +1,29 @@
+## 2026-02-02 - Issue #1: Backend Development - Logout Endpoint Implementation
+
+### What was implemented
+- Implemented POST /api/auth/logout endpoint for logging out users
+- Created LogoutRequest DTO
+- Logout endpoint revokes refresh token by calling RevokeRefreshTokenAsync
+- Returns 200 OK with success message
+- Tested successfully: logout revokes refresh token, subsequent refresh attempts fail with 400 Bad Request
+
+### Files changed
+- Created: backend/SobeSobe.Api/DTOs/LogoutRequest.cs (refresh token input for logout)
+- Modified: backend/SobeSobe.Api/Program.cs (added logout endpoint)
+
+### Learnings
+- Logout endpoint simple but critical for security
+- Revoking refresh token prevents further token refresh attempts
+- Client should discard access token locally on logout (access tokens can't be revoked server-side)
+- Returns 200 OK even if refresh token not found (idempotent operation)
+- Test workflow: login → logout → try refresh (should fail with 400)
+
+### Next steps
+- Implement get current user endpoint (GET /api/auth/user) with [Authorize] attribute
+- Add background job to clean up expired refresh tokens
+- Implement remaining user management endpoints (get profile, update profile, statistics)
+- Start implementing game management endpoints (create game, join game, list games)
+
 ## 2026-02-02 - Issue #1: Backend Development - Token Refresh Implementation
 
 ### What was implemented
