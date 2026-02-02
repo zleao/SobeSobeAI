@@ -794,3 +794,53 @@
 - Implement game state machine for round and trick management
 - Add real-time notifications for game events (gRPC/SignalR)
 
+
+## 2026-02-02 - Issue #1: Backend Development - Start Game Endpoint Implementation
+
+### What was implemented
+- Implemented POST /api/games/{id}/start endpoint for starting games
+- Endpoint requires authentication (.RequireAuthorization())
+- Only allows game creator to start (returns 403 Forbidden for non-creators)
+- Validates game exists and is in Waiting status (cannot start already started games)
+- Validates minimum 2 players required to start game
+- Randomly selects dealer from active players
+- Automatically determines party player (counter-clockwise from dealer)
+- Creates first Round entity with:
+  - RoundNumber = 1
+  - DealerUserId and PartyPlayerUserId set
+  - Status = TrumpSelection (waiting for party player to select trump)
+  - TrumpSuit = Hearts (default, will be changed by party player)
+  - TrickValue = 0 (will be set after trump selection)
+- Updates Game entity:
+  - Status = InProgress
+  - StartedAt timestamp
+  - CurrentRoundNumber = 1
+  - CurrentDealerPosition set to dealer's position
+- Returns StartGameResponse with gameId, status, startedAt, currentRoundNumber, currentDealerPosition
+- Error handling: 401 Unauthorized (no token), 404 Not Found (game not found), 403 Forbidden (not creator), 400 Bad Request (already started or < 2 players)
+
+### Files changed
+- Created: backend/SobeSobe.Api/DTOs/StartGameResponse.cs (response DTO with game start details)
+- Modified: backend/SobeSobe.Api/Program.cs (added POST /api/games/{id}/start endpoint after cancel game endpoint)
+
+### Learnings
+- Random dealer selection uses Random.Next() to pick from active players
+- Party player calculation: counter-clockwise means next position in circular order (dealerPosition + 1) % playerCount
+- Round.Status starts at TrumpSelection, waiting for party player to choose trump
+- Round.TrumpSuit has default value (Hearts) that will be overwritten during trump selection
+- Round.TrickValue is 0 initially and will be set to 1, 2, or 4 after trump selection (based on suit and timing)
+- Game.CurrentDealerPosition stores the position (0-4) of the current dealer for round management
+- FirstOrDefaultAsync with Include() loads navigation properties needed for game state queries
+- Dealer and party player selection logic handles non-sequential player positions by sorting first
+- Circular indexing: (index + 1) % count wraps around to 0 when reaching end of list
+- Testing workflow: register → login (2 users) → create game → join game → start game (201) → verify status (InProgress) → try start again (400)
+- Edge cases tested: start with 1 player (400), start already started game (400), non-creator tries to start (403)
+
+### Next steps
+- Implement trump selection endpoint (POST /api/games/{id}/rounds/current/trump)
+- Implement player decision endpoint (POST /api/games/{id}/rounds/current/play-decision)
+- Implement card dealing logic (deal 2 cards initially, then 3 more after decisions)
+- Implement card exchange endpoint (POST /api/games/{id}/rounds/current/exchange-cards)
+- Implement play card endpoint (POST /api/games/{id}/rounds/current/play-card)
+- Implement get game state endpoint (GET /api/games/{id}/state)
+- Add real-time notifications for game events (gRPC/SignalR)

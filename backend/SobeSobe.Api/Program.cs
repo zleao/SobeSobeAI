@@ -666,4 +666,99 @@ app.MapDelete("/api/games/{id:guid}", async (Guid id, HttpContext httpContext, A
 .RequireAuthorization()
 .WithName("CancelGame");
 
+// Start Game endpoint (requires authentication, creator only)
+app.MapPost("/api/games/{id:guid}/start", async (Guid id, HttpContext httpContext, ApplicationDbContext db) =>
+{
+    // Get user ID from JWT claims
+    var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+    if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    // Find game with player sessions
+    var game = await db.Games
+        .Include(g => g.PlayerSessions)
+        .FirstOrDefaultAsync(g => g.Id == id);
+
+    if (game == null)
+    {
+        return Results.NotFound(new { error = "Game not found" });
+    }
+
+    // Check if user is the game creator
+    if (game.CreatedByUserId != userId)
+    {
+        return Results.StatusCode(403); // Forbidden
+    }
+
+    // Check if game has already started
+    if (game.Status != GameStatus.Waiting)
+    {
+        return Results.BadRequest(new { error = "Game has already started" });
+    }
+
+    // Check minimum player count (need at least 2 players)
+    var activePlayers = game.PlayerSessions.Where(ps => ps.IsActive).ToList();
+    if (activePlayers.Count < 2)
+    {
+        return Results.BadRequest(new { error = "Need at least 2 players to start the game" });
+    }
+
+    // Select random dealer from active players
+    var random = new Random();
+    var dealerIndex = random.Next(activePlayers.Count);
+    var dealer = activePlayers[dealerIndex];
+
+    // Party player is counter-clockwise from dealer (to the right)
+    // Find next position counter-clockwise
+    var dealerPosition = dealer.Position;
+    var partyPlayerPosition = (dealerPosition + 1) % activePlayers.Count;
+    
+    // Find party player by position (need to handle cases where positions might not be sequential)
+    var sortedPlayers = activePlayers.OrderBy(p => p.Position).ToList();
+    var dealerIndexInSorted = sortedPlayers.FindIndex(p => p.Position == dealerPosition);
+    var partyPlayerIndexInSorted = (dealerIndexInSorted + 1) % sortedPlayers.Count;
+    var partyPlayer = sortedPlayers[partyPlayerIndexInSorted];
+
+    // Create first round
+    var round = new Round
+    {
+        GameId = game.Id,
+        RoundNumber = 1,
+        DealerUserId = dealer.UserId,
+        PartyPlayerUserId = partyPlayer.UserId,
+        Status = RoundStatus.TrumpSelection,
+        TrumpSuit = TrumpSuit.Hearts, // Default, will be selected by party player
+        TrumpSelectedBeforeDealing = false,
+        TrickValue = 0, // Will be set after trump selection
+        CurrentTrickNumber = 0,
+        StartedAt = DateTime.UtcNow
+    };
+
+    db.Rounds.Add(round);
+
+    // Update game status
+    game.Status = GameStatus.InProgress;
+    game.StartedAt = DateTime.UtcNow;
+    game.CurrentRoundNumber = 1;
+    game.CurrentDealerPosition = dealer.Position;
+
+    await db.SaveChangesAsync();
+
+    // Return start game response
+    var response = new StartGameResponse
+    {
+        GameId = game.Id,
+        Status = game.Status.ToString(),
+        StartedAt = game.StartedAt.Value,
+        CurrentRoundNumber = game.CurrentRoundNumber,
+        CurrentDealerPosition = game.CurrentDealerPosition.Value
+    };
+
+    return Results.Ok(response);
+})
+.RequireAuthorization()
+.WithName("StartGame");
+
 app.Run();
