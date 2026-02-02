@@ -109,3 +109,60 @@
 - Issue #16: Design database schema and domain models (now have complete rules to inform entity design)
 - Issue #11: Define REST API and gRPC contracts (rules documentation will guide endpoint design)
 - Issue #15: Create UI/UX wireframes and mockups (rules documentation includes score table requirements)
+
+## 2026-02-02 - Issue #16: Design database schema and domain models
+
+### What was implemented
+- Created comprehensive database schema documentation in docs/database-schema.md (25KB+)
+- Designed complete Entity Relationship Diagram (ERD) with 7 core entities
+- Implemented all domain models in SobeSobe.Core project with EF Core annotations
+- Created enums: GameStatus, RoundStatus, TrumpSuit, ScoreReason
+- Created Card value object with validation and rank value methods
+- Created 7 entity classes: User, Game, Round, PlayerSession, Hand, Trick, ScoreHistory
+- Documented all relationships and foreign keys (1:N, with CASCADE/RESTRICT rules)
+- Defined comprehensive data validation rules for all entities
+- Designed performance indexes for common query patterns
+- Planned data archival strategy (90-day archival for completed games)
+- Documented migration strategy from SQLite → Azure SQL Database
+
+**Entity Highlights:**
+- User: Authentication, profile, cumulative statistics (games played, wins, prize won)
+- Game: Game instance lifecycle (Waiting → InProgress → Completed/Abandoned)
+- Round: Round lifecycle with dealer/party player tracking, trump selection, trick value
+- PlayerSession: Player participation with position, points, consecutive rounds out tracking
+- Hand: JSON storage for current and initial cards (5-card hands)
+- Trick: JSON storage for cards played in order, lead and winner tracking
+- ScoreHistory: Complete audit trail of all point changes with reasons
+
+**Key Design Decisions:**
+- JSON storage for cards (flexible, easy to query)
+- Normalized 3NF design with minimal redundancy
+- Composite indexes for common patterns (GameId + RoundNumber, GameId + Position)
+- ScoreHistory provides complete audit trail (GameStart, TricksWon, Penalties)
+- Archival strategy keeps database performant (90-day moving window)
+- Clear migration path from SQLite → SQL Server for production
+
+### Files changed
+- Created: docs/database-schema.md (comprehensive schema documentation)
+- Created: backend/SobeSobe.Core/Enums/ (GameStatus, RoundStatus, TrumpSuit, ScoreReason)
+- Created: backend/SobeSobe.Core/ValueObjects/Card.cs (card value object)
+- Created: backend/SobeSobe.Core/Entities/ (User, Game, Round, PlayerSession, Hand, Trick, ScoreHistory)
+- Deleted: backend/SobeSobe.Core/Class1.cs (placeholder file)
+
+### Learnings
+- JSON columns in SQLite stored as TEXT, with System.Text.Json for serialization
+- EF Core [NotMapped] attribute allows helper properties (e.g., Cards list from CardsJson)
+- Foreign keys use required/nullable Guid to enforce relationships
+- Composite indexes support queries like "find all rounds for game ordered by round number"
+- ScoreHistory pattern provides complete audit trail and enables "undo" scenarios
+- Archival strategy critical for long-term performance (millions of completed games)
+- SQLite → SQL Server migration requires testing JSON functions and DateTime handling
+- Card value object uses record type for value semantics and immutability
+- Navigation properties use ICollection<T> for lazy loading support
+- Range attributes on enums (0-4 for Position) prevent invalid data
+
+### Next steps
+- Issue #11: Define REST API and gRPC contracts (now have complete entity models)
+- Create ApplicationDbContext and EF Core migrations
+- Implement repository interfaces and patterns
+- Add integration tests for entity validation rules
