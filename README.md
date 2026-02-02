@@ -1,2 +1,183 @@
-# SobeSobeAI
-Online multiplayer card game SobeSobe built with Angular, .NET 10 Minimal API, gRPC, and Aspire
+# SobeSobe Multiplayer Card Game
+
+A real-time multiplayer implementation of the traditional Portuguese card game "Sobe Sobe" built with modern web technologies.
+
+## 🎮 About the Game
+
+SobeSobe is a trick-taking card game for 2-5 players (ideally 5) where players compete to reduce their points from 20 to 0. The game features a unique trump selection mechanism, strategic card play, and dynamic scoring.
+
+## 🏗️ Technology Stack
+
+### Frontend
+- **Angular 19+** - Modern web framework with standalone components
+- **Tailwind CSS** - Utility-first CSS framework
+- **TypeScript** - Type-safe JavaScript
+- **gRPC-Web** - Real-time communication
+
+### Backend
+- **.NET 10** - High-performance Minimal API
+- **Entity Framework Core** - ORM with SQLite (dev) / SQL Server (prod)
+- **gRPC** - Efficient real-time communication
+- **SignalR** - WebSocket fallback for browsers
+
+### DevOps & Infrastructure
+- **.NET Aspire** - Local development orchestration
+- **Azure App Service** - Backend hosting
+- **Azure Static Web Apps** - Frontend hosting
+- **GitHub Actions** - CI/CD pipelines
+- **Bicep** - Infrastructure as Code
+
+## 📁 Project Structure
+
+```
+SobeSobeAI/
+├── frontend/                  # Angular application
+│   ├── src/
+│   ├── angular.json
+│   ├── package.json
+│   └── tailwind.config.js
+├── backend/                   # .NET backend
+│   ├── SobeSobe.Api/         # Minimal API project
+│   ├── SobeSobe.Core/        # Domain models and interfaces
+│   ├── SobeSobe.Infrastructure/ # Data access, repositories
+│   ├── SobeSobe.AppHost/     # Aspire orchestration
+│   ├── SobeSobe.Tests/       # Test projects
+│   └── SobeSobe.sln
+├── infrastructure/            # Bicep scripts
+├── docs/                      # Documentation
+│   ├── game-rules.md
+│   ├── api-specification.md
+│   └── architecture.md
+├── .github/
+│   └── workflows/            # CI/CD pipelines
+├── README.md
+└── LICENSE
+```
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- **Node.js** 20+ and npm
+- **.NET SDK** 10.0+
+- **Git**
+- **Visual Studio Code** or **Visual Studio 2025**
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/zleao/SobeSobeAI.git
+   cd SobeSobeAI
+   ```
+
+2. **Install frontend dependencies**
+   ```bash
+   cd frontend
+   npm install
+   ```
+
+3. **Restore backend dependencies**
+   ```bash
+   cd ../backend
+   dotnet restore
+   ```
+
+### Running with Aspire (Recommended)
+
+The easiest way to run the entire application:
+
+```bash
+cd backend/SobeSobe.AppHost
+dotnet run
+```
+
+This will:
+- Start the backend API
+- Start the frontend development server
+- Launch the Aspire dashboard (http://localhost:15888)
+- Configure service discovery
+
+### Running Separately
+
+**Frontend:**
+```bash
+cd frontend
+npm start
+# Runs on http://localhost:4200
+```
+
+**Backend:**
+```bash
+cd backend/SobeSobe.Api
+dotnet run
+# Runs on http://localhost:5000
+```
+
+## 🧪 Testing
+
+**Frontend tests:**
+```bash
+cd frontend
+npm test
+```
+
+**Backend tests:**
+```bash
+cd backend
+dotnet test
+```
+
+## 📚 Documentation
+
+- [Game Rules](./docs/game-rules.md) - Complete game rules and mechanics
+- [API Specification](./docs/api-specification.md) - REST API and gRPC contracts
+- [Architecture](./docs/architecture.md) - System architecture and design decisions
+
+## 🛠️ Development
+
+### Code Style
+
+- **Frontend**: Follow Angular style guide, use Prettier for formatting
+- **Backend**: Follow .NET conventions, use built-in analyzers
+
+### Commit Messages
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+- `feat:` New features
+- `fix:` Bug fixes
+- `docs:` Documentation changes
+- `refactor:` Code refactoring
+- `test:` Adding tests
+- `chore:` Maintenance tasks
+
+## 🚢 Deployment
+
+The application is deployed to Azure:
+
+- **Frontend**: Azure Static Web Apps
+- **Backend**: Azure App Service
+- **Database**: Azure SQL Database (production)
+
+Deployment is automated via GitHub Actions on merge to `main`.
+
+## 📝 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 👥 Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+
+## 🎯 Roadmap
+
+See the [GitHub Issues](https://github.com/zleao/SobeSobeAI/issues) for planned features and enhancements.
+
+## 📧 Contact
+
+- Project Lead: [@zleao](https://github.com/zleao)
+- Issues: [GitHub Issues](https://github.com/zleao/SobeSobeAI/issues)
+
+---
+
+Made with ❤️ by the SobeSobe team
