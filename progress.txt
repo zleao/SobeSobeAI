@@ -35,3 +35,41 @@
 - Issue #9: Setup .NET Aspire for local development (AppHost is created, needs configuration)
 - Issue #12: Write comprehensive game rules documentation
 - Issue #11: Define REST API and gRPC contracts
+
+## 2026-02-02 - Issue #9: Setup .NET Aspire for local development
+
+### What was implemented
+- Configured .NET Aspire AppHost to orchestrate the backend API service
+- Created SobeSobe.ServiceDefaults project with telemetry, health checks, and service discovery
+- Integrated Aspire ServiceDefaults into SobeSobe.Api for automatic health checks and observability
+- Added `AddServiceDefaults()` and `MapDefaultEndpoints()` to API for health check endpoints
+- Created comprehensive Aspire usage documentation (docs/aspire-usage.md)
+- Aspire Dashboard provides real-time monitoring, logs, traces, and metrics
+- Used Aspire 9.5.2 with .NET 10 SDK (no workload required, NuGet packages only)
+
+### Files changed
+- Modified: backend/SobeSobe.AppHost/AppHost.cs (configured API service orchestration)
+- Modified: backend/SobeSobe.AppHost/SobeSobe.AppHost.csproj (added Aspire.Hosting.AppHost package)
+- Modified: backend/SobeSobe.Api/SobeSobe.Api.csproj (added ServiceDefaults reference)
+- Modified: backend/SobeSobe.Api/Program.cs (integrated Aspire service defaults)
+- Created: backend/SobeSobe.ServiceDefaults/ (Aspire service defaults project)
+- Modified: backend/SobeSobe.sln (added ServiceDefaults project)
+- Created: docs/aspire-usage.md (comprehensive Aspire documentation)
+
+### Learnings
+- .NET Aspire 9.5.2 is the latest stable version compatible with .NET 10 SDK
+- Aspire 13.x versions don't exist yet; documentation was referencing future versions
+- Aspire.Hosting.Sqlite and Aspire.Hosting.NodeJs packages had version compatibility issues
+- Removed `IsAspireHost` property to avoid deprecated workload detection in .NET 10
+- Simplified AppHost by deferring SQLite integration until database schema is designed (Issue #16)
+- Deferred Angular/Node.js integration in AppHost to future iteration
+- Used `AddExecutable` as workaround for project reference metadata generation issues
+- ServiceDefaults provides automatic health checks at `/health` and `/alive` endpoints
+- Aspire Dashboard accessible at https://localhost:17032 or http://localhost:15283
+- All builds and tests pass successfully
+
+### Next steps
+- Issue #16: Design database schema (will integrate SQLite with Aspire after schema is ready)
+- Issue #12: Write comprehensive game rules documentation
+- Issue #11: Define REST API and gRPC contracts
+- Future: Integrate Angular frontend with AppHost using Aspire.Hosting.NodeJs

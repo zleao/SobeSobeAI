@@ -3,5 +3,6 @@
   <Project Path="SobeSobe.AppHost/SobeSobe.AppHost.csproj" />
   <Project Path="SobeSobe.Core/SobeSobe.Core.csproj" />
   <Project Path="SobeSobe.Infrastructure/SobeSobe.Infrastructure.csproj" />
+  <Project Path="SobeSobe.ServiceDefaults/SobeSobe.ServiceDefaults.csproj" />
   <Project Path="SobeSobe.Tests/SobeSobe.Tests.csproj" />
 </Solution>
