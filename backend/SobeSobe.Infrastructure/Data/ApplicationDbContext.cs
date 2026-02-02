@@ -17,6 +17,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Hand> Hands => Set<Hand>();
     public DbSet<Trick> Tricks => Set<Trick>();
     public DbSet<ScoreHistory> ScoreHistories => Set<ScoreHistory>();
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -188,6 +189,25 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.PointsChange).IsRequired();
             entity.Property(e => e.PointsAfter).IsRequired();
             entity.Property(e => e.Reason).IsRequired();
+        });
+
+        // RefreshToken entity configuration
+        modelBuilder.Entity<RefreshToken>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.Token).IsUnique();
+            entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => e.ExpiresAt);
+
+            entity.Property(e => e.Token).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.ExpiresAt).IsRequired();
+            entity.Property(e => e.CreatedAt).IsRequired();
+
+            // RefreshToken -> User
+            entity.HasOne(rt => rt.User)
+                .WithMany(u => u.RefreshTokens)
+                .HasForeignKey(rt => rt.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

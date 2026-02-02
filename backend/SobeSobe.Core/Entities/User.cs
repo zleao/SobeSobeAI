@@ -43,4 +43,5 @@ public class User
     // Navigation properties
     public ICollection<Game> CreatedGames { get; set; } = new List<Game>();
     public ICollection<PlayerSession> PlayerSessions { get; set; } = new List<PlayerSession>();
+    public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 }

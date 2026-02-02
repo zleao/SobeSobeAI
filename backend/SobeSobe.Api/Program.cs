@@ -35,7 +35,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 // Register services
-builder.Services.AddSingleton<JwtTokenService>();
+builder.Services.AddScoped<JwtTokenService>();
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -81,7 +81,7 @@ app.MapPost("/api/auth/login", async (LoginRequest request, ApplicationDbContext
 
     // Generate tokens
     var accessToken = jwtService.GenerateAccessToken(user.Id, user.Username, user.Email);
-    var refreshToken = jwtService.GenerateRefreshToken();
+    var refreshToken = await jwtService.GenerateAndStoreRefreshTokenAsync(user.Id);
 
     // Return login response
     var response = new LoginResponse
@@ -106,6 +106,38 @@ app.MapPost("/api/auth/login", async (LoginRequest request, ApplicationDbContext
     return Results.Ok(response);
 })
 .WithName("LoginUser")
+.WithOpenApi();
+
+// Token Refresh endpoint
+app.MapPost("/api/auth/refresh", async (RefreshTokenRequest request, JwtTokenService jwtService) =>
+{
+    // Validate refresh token
+    var refreshToken = await jwtService.ValidateRefreshTokenAsync(request.RefreshToken);
+    
+    if (refreshToken == null)
+    {
+        return Results.BadRequest(new { error = "Invalid or expired refresh token" });
+    }
+
+    // Revoke old refresh token
+    await jwtService.RevokeRefreshTokenAsync(request.RefreshToken);
+
+    // Generate new tokens
+    var user = refreshToken.User;
+    var newAccessToken = jwtService.GenerateAccessToken(user.Id, user.Username, user.Email);
+    var newRefreshToken = await jwtService.GenerateAndStoreRefreshTokenAsync(user.Id);
+
+    // Return new tokens
+    var response = new RefreshTokenResponse
+    {
+        AccessToken = newAccessToken,
+        RefreshToken = newRefreshToken,
+        TokenType = "Bearer"
+    };
+
+    return Results.Ok(response);
+})
+.WithName("RefreshToken")
 .WithOpenApi();
 
 // User Registration endpoint

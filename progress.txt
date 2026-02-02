@@ -1,3 +1,46 @@
+## 2026-02-02 - Issue #1: Backend Development - Token Refresh Implementation
+
+### What was implemented
+- Implemented POST /api/auth/refresh endpoint for refreshing access tokens
+- Created RefreshToken entity to store refresh tokens in database
+- Created RefreshTokenRequest and RefreshTokenResponse DTOs
+- Extended JwtTokenService with methods: GenerateAndStoreRefreshTokenAsync, ValidateRefreshTokenAsync, RevokeRefreshTokenAsync, RevokeAllUserRefreshTokensAsync
+- Updated ApplicationDbContext to include RefreshTokens DbSet with indexes on Token (unique), UserId, and ExpiresAt
+- Created EF Core migration "AddRefreshToken" to add RefreshTokens table
+- Updated login endpoint to store refresh tokens in database
+- Changed JwtTokenService from Singleton to Scoped lifetime (requires DbContext)
+- Refresh tokens expire after 7 days, old refresh tokens automatically revoked on refresh
+- Tested successfully: login generates stored refresh token, refresh endpoint returns new tokens, old refresh token properly revoked
+
+### Files changed
+- Created: backend/SobeSobe.Core/Entities/RefreshToken.cs (entity with UserId FK, Token, ExpiresAt, CreatedAt, RevokedAt, IsActive property)
+- Created: backend/SobeSobe.Api/DTOs/RefreshTokenRequest.cs (refresh token input)
+- Created: backend/SobeSobe.Api/DTOs/RefreshTokenResponse.cs (new access token and refresh token)
+- Modified: backend/SobeSobe.Core/Entities/User.cs (added RefreshTokens navigation property)
+- Modified: backend/SobeSobe.Infrastructure/Data/ApplicationDbContext.cs (added RefreshTokens DbSet, configured entity relationships)
+- Modified: backend/SobeSobe.Api/Services/JwtTokenService.cs (added database storage and validation methods, constructor now requires ApplicationDbContext)
+- Modified: backend/SobeSobe.Api/Program.cs (changed JwtTokenService to Scoped, updated login to use GenerateAndStoreRefreshTokenAsync, added refresh endpoint)
+- Created: backend/SobeSobe.Infrastructure/Data/Migrations/20260202133418_AddRefreshToken.cs (EF Core migration)
+
+### Learnings
+- Refresh tokens must be stored in database for revocation and security audit trail
+- Service lifetime matters: JwtTokenService changed from Singleton to Scoped to access DbContext
+- RefreshToken entity tracks creation time, expiration, and revocation with IsActive computed property
+- Token revocation: old refresh token revoked immediately when new tokens issued
+- EF Core Include() method loads User navigation property when validating refresh token
+- Unique index on Token column prevents duplicate refresh tokens
+- CASCADE delete on UserId FK ensures orphaned refresh tokens deleted when user deleted
+- Test workflow: register → login (get tokens) → refresh (get new tokens) → try old token (should fail)
+- 7-day refresh token expiry balances security and user experience
+- FirstOrDefaultAsync with Token lookup efficient with unique index
+
+### Next steps
+- Implement logout endpoint (POST /api/auth/logout) with token revocation
+- Implement get current user endpoint (GET /api/auth/user) with [Authorize] attribute
+- Add background job to clean up expired refresh tokens periodically
+- Implement remaining user management endpoints (get profile, update profile, statistics)
+- Start implementing game management endpoints (create game, join game, list games)
+
 ## 2026-02-02 - Issue #1: Backend Development - User Login with JWT Authentication
 
 ### What was implemented
