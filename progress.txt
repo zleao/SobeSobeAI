@@ -408,3 +408,39 @@
 - Implement game logic service layer in SobeSobe.Core
 - Start implementing REST API endpoints for authentication and game management (Issue #1)
 - Integrate ApplicationDbContext with Aspire orchestration for dev workflow
+
+## 2026-02-02 - Issue #1: Backend Development - User Registration Tracer Bullet
+
+### What was implemented
+- Created DTOs: RegisterUserRequest and UserResponse for API contracts
+- Implemented PasswordHasher service using PBKDF2 with SHA256 (100,000 iterations, 16-byte salt, 32-byte hash)
+- Created POST /api/users/register endpoint with full validation
+- Endpoint validates username uniqueness, email uniqueness, and password strength
+- Returns 201 Created with user data on success, 400 Bad Request on validation errors
+- Tested endpoint manually - registration works, duplicate username/email validation works
+
+### Files changed
+- Created: backend/SobeSobe.Api/DTOs/RegisterUserRequest.cs (validation attributes for username, email, password, displayName)
+- Created: backend/SobeSobe.Api/DTOs/UserResponse.cs (user data without password hash)
+- Created: backend/SobeSobe.Api/Services/PasswordHasher.cs (PBKDF2 password hashing and verification)
+- Modified: backend/SobeSobe.Api/Program.cs (added user registration endpoint, removed weather forecast placeholder)
+
+### Learnings
+- Minimal API endpoints use dependency injection - ApplicationDbContext injected directly into endpoint lambda
+- Results.Created() returns 201 with Location header pointing to new resource
+- Results.BadRequest() returns 400 with error message in response body
+- PasswordHasher.HashPassword() generates 64-byte base64 string (16-byte salt + 32-byte hash)
+- EF Core Any() method efficient for checking existence without loading full entity
+- DTOs keep API contracts separate from domain models
+- required keyword on DTO properties enforces non-null values
+- RegularExpression validation attribute enforces username format (alphanumeric + underscore)
+- StringLength validation ensures password meets minimum 8-character requirement
+- EmailAddress validation attribute validates email format
+
+### Next steps
+- Implement user login endpoint with JWT token generation (Issue #1)
+- Implement repository pattern to abstract data access from endpoints
+- Add unit tests for PasswordHasher service
+- Add integration tests for user registration endpoint
+- Implement remaining user management endpoints (get profile, update profile, get statistics)
+- Start implementing game management endpoints (create game, join game, list games)

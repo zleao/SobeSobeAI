@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using SobeSobe.Infrastructure.Data;
+using SobeSobe.Api.DTOs;
+using SobeSobe.Api.Services;
+using SobeSobe.Core.Entities;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,28 +30,54 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-var summaries = new[]
+// User Registration endpoint
+app.MapPost("/api/users/register", async (RegisterUserRequest request, ApplicationDbContext db) =>
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+    // Check if username already exists
+    if (await db.Users.AnyAsync(u => u.Username == request.Username))
+    {
+        return Results.BadRequest(new { error = "Username already exists" });
+    }
 
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
+    // Check if email already exists
+    if (await db.Users.AnyAsync(u => u.Email == request.Email))
+    {
+        return Results.BadRequest(new { error = "Email already exists" });
+    }
+
+    // Hash password
+    var passwordHash = PasswordHasher.HashPassword(request.Password);
+
+    // Create user
+    var user = new User
+    {
+        Username = request.Username,
+        Email = request.Email,
+        PasswordHash = passwordHash,
+        DisplayName = request.DisplayName,
+        CreatedAt = DateTime.UtcNow
+    };
+
+    db.Users.Add(user);
+    await db.SaveChangesAsync();
+
+    // Return user response
+    var userResponse = new UserResponse
+    {
+        Id = user.Id,
+        Username = user.Username,
+        Email = user.Email,
+        DisplayName = user.DisplayName,
+        AvatarUrl = user.AvatarUrl,
+        CreatedAt = user.CreatedAt,
+        TotalGamesPlayed = user.TotalGamesPlayed,
+        TotalWins = user.TotalWins,
+        TotalPrizeWon = user.TotalPrizeWon
+    };
+
+    return Results.Created($"/api/users/{user.Id}", userResponse);
 })
-.WithName("GetWeatherForecast");
+.WithName("RegisterUser")
+.WithOpenApi();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
