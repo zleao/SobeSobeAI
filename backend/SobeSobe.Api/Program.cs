@@ -302,7 +302,7 @@ app.MapGet("/api/games", async (
         Id = g.Id,
         CreatedBy = new UserSummary
         {
-            Id = g.CreatedBy.Id,
+            Id = g.CreatedBy!.Id,
             Username = g.CreatedBy.Username,
             DisplayName = g.CreatedBy.DisplayName
         },
@@ -313,7 +313,7 @@ app.MapGet("/api/games", async (
             .OrderBy(ps => ps.Position)
             .Select(ps => new PlayerSummary
             {
-                UserId = ps.User.Id,
+                UserId = ps.User!.Id,
                 Username = ps.User.Username,
                 DisplayName = ps.User.DisplayName,
                 Position = ps.Position
@@ -337,6 +337,57 @@ app.MapGet("/api/games", async (
     return Results.Ok(response);
 })
 .WithName("ListGames");
+
+// Get Game Details endpoint (public)
+app.MapGet("/api/games/{id:guid}", async (Guid id, ApplicationDbContext db) =>
+{
+    // Find game with all related data
+    var game = await db.Games
+        .Include(g => g.CreatedBy)
+        .Include(g => g.PlayerSessions)
+            .ThenInclude(ps => ps.User)
+        .FirstOrDefaultAsync(g => g.Id == id);
+
+    if (game == null)
+    {
+        return Results.NotFound(new { error = "Game not found" });
+    }
+
+    // Map to response
+    var gameResponse = new GameResponse
+    {
+        Id = game.Id,
+        CreatedBy = game.CreatedByUserId,
+        CreatedByUsername = game.CreatedBy!.Username,
+        Status = game.Status,
+        MaxPlayers = game.MaxPlayers,
+        CurrentPlayerCount = game.PlayerSessions.Count,
+        CurrentDealerIndex = game.CurrentDealerPosition,
+        CurrentRoundNumber = game.CurrentRoundNumber,
+        CreatedAt = game.CreatedAt,
+        StartedAt = game.StartedAt,
+        CompletedAt = game.CompletedAt,
+        Players = game.PlayerSessions
+            .OrderBy(ps => ps.Position)
+            .Select(ps => new PlayerSessionResponse
+            {
+                Id = ps.Id,
+                UserId = ps.User!.Id,
+                Username = ps.User.Username,
+                DisplayName = ps.User.DisplayName,
+                AvatarUrl = ps.User.AvatarUrl,
+                Position = ps.Position,
+                CurrentPoints = ps.CurrentPoints,
+                IsActive = ps.IsActive,
+                ConsecutiveRoundsOut = ps.ConsecutiveRoundsOut,
+                JoinedAt = ps.JoinedAt
+            })
+            .ToList()
+    };
+
+    return Results.Ok(gameResponse);
+})
+.WithName("GetGameDetails");
 
 // Create Game endpoint (requires authentication)
 app.MapPost("/api/games", async (CreateGameRequest request, HttpContext httpContext, ApplicationDbContext db) =>

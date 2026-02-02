@@ -1,3 +1,36 @@
+## 2026-02-02 - Issue #1: Backend Development - Get Game Details Endpoint Implementation
+
+### What was implemented
+- Implemented GET /api/games/{id} endpoint for fetching full game details
+- Endpoint accepts Guid game ID as route parameter
+- Uses EF Core Include() to eagerly load CreatedBy user and PlayerSessions with User navigation properties
+- Returns comprehensive GameResponse with full game state and player list
+- Returns 404 Not Found if game doesn't exist
+- Endpoint is public (no authentication required) to allow viewing game details
+- Fixed null reference warnings in both list games and get game details endpoints by adding null-forgiving operators (!)
+- Tested successfully: create game → fetch details → verify 404 for non-existent game
+
+### Files changed
+- Modified: backend/SobeSobe.Api/Program.cs (added GET /api/games/{id} endpoint, fixed null reference warnings)
+
+### Learnings
+- Route parameter constraints with {id:guid} enforce Guid type in URL
+- FirstOrDefaultAsync() with Include() eagerly loads navigation properties
+- Null-forgiving operator (!) suppresses compiler warnings for navigation properties loaded with Include()
+- EF Core Include() with ThenInclude() ensures nested navigation properties (Game → PlayerSessions → User) are loaded
+- Minimal API results: Results.Ok() for 200, Results.NotFound() for 404
+- Players ordered by Position property for consistent display order
+- GameResponse DTO reused from create game endpoint for consistency
+- Public endpoints allow browsing game state before joining (transparency for users)
+- Testing workflow: register → login → create game → get game details → verify 404
+
+### Next steps
+- Implement join game endpoint (POST /api/games/{id}/join)
+- Implement leave game endpoint (POST /api/games/{id}/leave)
+- Implement cancel game endpoint (DELETE /api/games/{id})
+- Implement start game endpoint (POST /api/games/{id}/start)
+- Implement game state machine for round and trick management
+
 ## 2026-02-02 - Issue #1: Backend Development - Create Game Endpoint Implementation
 
 ### What was implemented
