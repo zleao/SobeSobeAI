@@ -28,8 +28,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateIssuerSigningKey = true,
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT secret not configured")))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT secret not configured"))),
+            // Map inbound claims to original JWT claim names
+            NameClaimType = System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.UniqueName,
+            RoleClaimType = "role"
         };
+        
+        // Don't map claims automatically
+        options.MapInboundClaims = false;
     });
 
 builder.Services.AddAuthorization();
@@ -149,6 +155,43 @@ app.MapPost("/api/auth/logout", async (LogoutRequest request, JwtTokenService jw
     return Results.Ok(new { message = "Logged out successfully" });
 })
 .WithName("Logout")
+.WithOpenApi();
+
+// Get Current User endpoint (requires authentication)
+app.MapGet("/api/auth/user", async (HttpContext httpContext, ApplicationDbContext db) =>
+{
+    // Get user ID from JWT claims (using "sub" claim)
+    var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+    if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    // Find user in database
+    var user = await db.Users.FindAsync(userId);
+    if (user == null)
+    {
+        return Results.NotFound(new { error = "User not found" });
+    }
+
+    // Return user response
+    var userResponse = new UserResponse
+    {
+        Id = user.Id,
+        Username = user.Username,
+        Email = user.Email,
+        DisplayName = user.DisplayName,
+        AvatarUrl = user.AvatarUrl,
+        CreatedAt = user.CreatedAt,
+        TotalGamesPlayed = user.TotalGamesPlayed,
+        TotalWins = user.TotalWins,
+        TotalPrizeWon = user.TotalPrizeWon
+    };
+
+    return Results.Ok(userResponse);
+})
+.RequireAuthorization()
+.WithName("GetCurrentUser")
 .WithOpenApi();
 
 // User Registration endpoint
