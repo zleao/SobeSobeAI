@@ -1,3 +1,51 @@
+## 2026-02-02 - Issue #1: Backend Development - Trump Selection Endpoint Implementation
+
+### What was implemented
+- Implemented POST /api/games/{id}/rounds/current/trump endpoint for selecting trump suit
+- Created SelectTrumpRequest and SelectTrumpResponse DTOs
+- Endpoint requires authentication (.RequireAuthorization())
+- Only allows party player to select trump (returns 403 Forbidden for others)
+- Validates game exists and round is in TrumpSelection phase (returns 409 Conflict if wrong phase)
+- Validates trump selection rules:
+  - Only Hearts can be selected before dealing (selectedBeforeDealing = true)
+  - Any suit can be selected after receiving 2 cards (selectedBeforeDealing = false)
+- Calculates trick value based on trump suit and timing:
+  - Hearts before dealing: 4 points (blind trump)
+  - Hearts after 2 cards: 2 points
+  - Diamonds/Clubs/Spades before dealing: 2 points
+  - Diamonds/Clubs/Spades after 2 cards: 1 point
+- Updates round with trump selection and moves to next phase:
+  - If selected before dealing: moves to Dealing phase
+  - If selected after 2 cards: moves to PlayerDecisions phase
+- Returns trump details including roundId, trumpSuit, trumpSelectedBeforeDealing, trickValue
+- Error handling: 401 Unauthorized (no token), 404 Not Found (game not found), 403 Forbidden (not party player), 400 Bad Request (invalid trump rules), 409 Conflict (wrong phase)
+
+### Files changed
+- Created: backend/SobeSobe.Api/DTOs/SelectTrumpRequest.cs (trump suit and timing input)
+- Created: backend/SobeSobe.Api/DTOs/SelectTrumpResponse.cs (trump selection result)
+- Modified: backend/SobeSobe.Api/Program.cs (added POST /api/games/{id}/rounds/current/trump endpoint after start game endpoint)
+
+### Learnings
+- Trump selection has complex rules based on timing (before/after dealing) and suit
+- Hearts before dealing (blind trump) doubles trick values from 2→4 (Hearts) or 1→2 (others)
+- Party player is determined when game starts based on dealer position (counter-clockwise)
+- Round.Status progression: TrumpSelection → Dealing (if blind) or PlayerDecisions (if after cards)
+- EF Core Include() with OrderByDescending().Take(1) efficiently loads most recent round
+- Switch expressions provide clean syntax for trick value calculation based on suit
+- RoundStatus enum: TrumpSelection (1) → Dealing (0) or PlayerDecisions (2)
+- Testing workflow: register → login (2 users) → create game → join game → start game → select trump (party player only)
+- Tested edge cases: Hearts before dealing (4 pts), Diamonds after dealing (1 pt), invalid suit before dealing (400), selecting twice (409)
+- Phase validation prevents trump selection at wrong time (already selected or game not started)
+
+### Next steps
+- Implement player decision endpoint (POST /api/games/{id}/rounds/current/play-decision) - opt-in/opt-out
+- Implement card dealing logic (deal 2 cards initially, then 3 more after decisions)
+- Implement card exchange endpoint (POST /api/games/{id}/rounds/current/exchange-cards)
+- Implement play card endpoint (POST /api/games/{id}/rounds/current/play-card)
+- Implement get game state endpoint (GET /api/games/{id}/state)
+- Implement score history endpoint (GET /api/games/{id}/scores)
+- Add real-time notifications for game events (gRPC/SignalR)
+
 ## 2026-02-02 - Issue #1: Backend Development - Cancel Game Endpoint Implementation
 
 ### What was implemented

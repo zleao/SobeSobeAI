@@ -761,4 +761,109 @@ app.MapPost("/api/games/{id:guid}/start", async (Guid id, HttpContext httpContex
 .RequireAuthorization()
 .WithName("StartGame");
 
+// Select Trump endpoint (requires authentication, party player only)
+app.MapPost("/api/games/{id:guid}/rounds/current/trump", async (Guid id, SelectTrumpRequest request, HttpContext httpContext, ApplicationDbContext db) =>
+{
+    // Get user ID from JWT claims
+    var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+    if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    // Find game with current round
+    var game = await db.Games
+        .Include(g => g.Rounds.OrderByDescending(r => r.RoundNumber).Take(1))
+        .FirstOrDefaultAsync(g => g.Id == id);
+
+    if (game == null)
+    {
+        return Results.NotFound(new { error = "Game not found" });
+    }
+
+    // Get current round
+    var currentRound = game.Rounds.FirstOrDefault();
+    if (currentRound == null)
+    {
+        return Results.BadRequest(new { error = "No active round found" });
+    }
+
+    // Check if round is in TrumpSelection phase
+    if (currentRound.Status != RoundStatus.TrumpSelection)
+    {
+        return Results.StatusCode(409); // Conflict - wrong phase
+    }
+
+    // Check if user is the party player
+    if (currentRound.PartyPlayerUserId != userId)
+    {
+        return Results.StatusCode(403); // Forbidden - only party player can select trump
+    }
+
+    // Validate trump suit selection rules
+    if (request.SelectedBeforeDealing && request.TrumpSuit != TrumpSuit.Hearts)
+    {
+        return Results.BadRequest(new { error = "Only Hearts can be selected before dealing" });
+    }
+
+    // Calculate trick value based on trump suit and timing
+    int trickValue;
+    if (request.SelectedBeforeDealing)
+    {
+        // Selected before dealing (blind trump) - all values doubled
+        trickValue = request.TrumpSuit switch
+        {
+            TrumpSuit.Hearts => 4,
+            TrumpSuit.Diamonds => 2,
+            TrumpSuit.Clubs => 2,
+            TrumpSuit.Spades => 2,
+            _ => 1
+        };
+    }
+    else
+    {
+        // Selected after receiving 2 cards - normal values
+        trickValue = request.TrumpSuit switch
+        {
+            TrumpSuit.Hearts => 2,
+            TrumpSuit.Diamonds => 1,
+            TrumpSuit.Clubs => 1,
+            TrumpSuit.Spades => 1,
+            _ => 1
+        };
+    }
+
+    // Update round with trump selection
+    currentRound.TrumpSuit = request.TrumpSuit;
+    currentRound.TrumpSelectedBeforeDealing = request.SelectedBeforeDealing;
+    currentRound.TrickValue = trickValue;
+    
+    // Move to next phase based on trump selection timing
+    if (request.SelectedBeforeDealing)
+    {
+        // If trump was selected before dealing, move to Dealing phase first
+        currentRound.Status = RoundStatus.Dealing;
+    }
+    else
+    {
+        // If trump was selected after 2 cards, move to PlayerDecisions phase
+        currentRound.Status = RoundStatus.PlayerDecisions;
+    }
+
+    await db.SaveChangesAsync();
+
+    // Return response
+    var response = new SelectTrumpResponse
+    {
+        RoundId = currentRound.Id,
+        TrumpSuit = currentRound.TrumpSuit,
+        TrumpSelectedBeforeDealing = currentRound.TrumpSelectedBeforeDealing,
+        TrickValue = currentRound.TrickValue
+    };
+
+    return Results.Ok(response);
+})
+.RequireAuthorization()
+.WithName("SelectTrump");
+
 app.Run();
