@@ -1,0 +1,254 @@
+syntax = "proto3";
+
+package sobesobe.game;
+
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "SobeSobe.Api.Protos";
+
+// Game events streaming service
+service GameEvents {
+  // Subscribe to game events for a specific game
+  rpc Subscribe(SubscribeRequest) returns (stream GameEvent);
+  
+  // Send player action (alternative to REST API for real-time play)
+  rpc SendAction(PlayerAction) returns (ActionResponse);
+  
+  // Heartbeat to keep connection alive
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+// Subscribe to game events
+message SubscribeRequest {
+  string game_id = 1;
+  string access_token = 2;
+}
+
+// Game event (server → client)
+message GameEvent {
+  string game_id = 1;
+  EventType type = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  
+  oneof payload {
+    PlayerJoinedEvent player_joined = 10;
+    PlayerLeftEvent player_left = 11;
+    GameStartedEvent game_started = 12;
+    RoundStartedEvent round_started = 13;
+    TrumpSelectedEvent trump_selected = 14;
+    CardDealtEvent card_dealt = 15;
+    PlayDecisionEvent play_decision = 16;
+    CardsExchangedEvent cards_exchanged = 17;
+    CardPlayedEvent card_played = 18;
+    TrickCompletedEvent trick_completed = 19;
+    RoundCompletedEvent round_completed = 20;
+    GameCompletedEvent game_completed = 21;
+    PlayerTurnEvent player_turn = 22;
+    ErrorEvent error = 99;
+  }
+}
+
+enum EventType {
+  PLAYER_JOINED = 0;
+  PLAYER_LEFT = 1;
+  GAME_STARTED = 2;
+  ROUND_STARTED = 3;
+  TRUMP_SELECTED = 4;
+  CARD_DEALT = 5;
+  PLAY_DECISION = 6;
+  CARDS_EXCHANGED = 7;
+  CARD_PLAYED = 8;
+  TRICK_COMPLETED = 9;
+  ROUND_COMPLETED = 10;
+  GAME_COMPLETED = 11;
+  PLAYER_TURN = 12;
+  ERROR = 99;
+}
+
+// Event: Player joined game
+message PlayerJoinedEvent {
+  string user_id = 1;
+  string username = 2;
+  string display_name = 3;
+  int32 position = 4;
+}
+
+// Event: Player left game
+message PlayerLeftEvent {
+  string user_id = 1;
+  int32 position = 2;
+}
+
+// Event: Game started
+message GameStartedEvent {
+  google.protobuf.Timestamp started_at = 1;
+  int32 dealer_position = 2;
+  repeated PlayerInfo players = 3;
+}
+
+// Event: New round started
+message RoundStartedEvent {
+  string round_id = 1;
+  int32 round_number = 2;
+  int32 dealer_position = 3;
+  int32 party_player_position = 4;
+}
+
+// Event: Trump suit selected
+message TrumpSelectedEvent {
+  string trump_suit = 1;
+  bool selected_before_dealing = 2;
+  int32 trick_value = 3;
+}
+
+// Event: Card dealt to player (only sent to specific player)
+message CardDealtEvent {
+  repeated Card cards = 1;
+}
+
+// Event: Player decided to play or sit out
+message PlayDecisionEvent {
+  int32 position = 1;
+  bool will_play = 2;
+}
+
+// Event: Player exchanged cards
+message CardsExchangedEvent {
+  int32 position = 1;
+  int32 card_count = 2;
+  // New cards only sent to the player who exchanged
+  repeated Card new_cards = 3;
+}
+
+// Event: Card played
+message CardPlayedEvent {
+  int32 position = 1;
+  Card card = 2;
+  int32 trick_number = 3;
+}
+
+// Event: Trick completed
+message TrickCompletedEvent {
+  int32 trick_number = 1;
+  int32 winner_position = 2;
+  repeated CardPlay cards_played = 3;
+}
+
+// Event: Round completed
+message RoundCompletedEvent {
+  string round_id = 1;
+  int32 round_number = 2;
+  repeated RoundScore scores = 3;
+}
+
+// Event: Game completed
+message GameCompletedEvent {
+  string game_id = 1;
+  int32 winner_position = 2;
+  string winner_user_id = 3;
+  repeated FinalScore final_scores = 4;
+  google.protobuf.Timestamp completed_at = 5;
+}
+
+// Event: Player's turn to act
+message PlayerTurnEvent {
+  int32 position = 1;
+  string action_required = 2; // "SELECT_TRUMP", "PLAY_DECISION", "EXCHANGE_CARDS", "PLAY_CARD"
+  int32 timeout_seconds = 3;
+}
+
+// Event: Error occurred
+message ErrorEvent {
+  string error_code = 1;
+  string message = 2;
+  map<string, string> details = 3;
+}
+
+// Player action (client → server)
+message PlayerAction {
+  string game_id = 1;
+  string access_token = 2;
+  ActionType action_type = 3;
+  
+  oneof action {
+    SelectTrumpAction select_trump = 10;
+    PlayDecisionAction play_decision = 11;
+    ExchangeCardsAction exchange_cards = 12;
+    PlayCardAction play_card = 13;
+  }
+}
+
+enum ActionType {
+  SELECT_TRUMP = 0;
+  PLAY_DECISION = 1;
+  EXCHANGE_CARDS = 2;
+  PLAY_CARD = 3;
+}
+
+message SelectTrumpAction {
+  string trump_suit = 1;
+  bool selected_before_dealing = 2;
+}
+
+message PlayDecisionAction {
+  bool will_play = 1;
+}
+
+message ExchangeCardsAction {
+  repeated Card cards_to_exchange = 1;
+}
+
+message PlayCardAction {
+  Card card = 1;
+}
+
+// Action response
+message ActionResponse {
+  bool success = 1;
+  string error_code = 2;
+  string error_message = 3;
+}
+
+// Heartbeat
+message HeartbeatRequest {
+  string game_id = 1;
+}
+
+message HeartbeatResponse {
+  google.protobuf.Timestamp server_time = 1;
+}
+
+// Common types
+message Card {
+  string rank = 1; // "Ace", "7", "King", "Queen", "Jack", "6", "5", "4", "3", "2"
+  string suit = 2; // "Hearts", "Diamonds", "Clubs", "Spades"
+}
+
+message PlayerInfo {
+  string user_id = 1;
+  string username = 2;
+  string display_name = 3;
+  int32 position = 4;
+  int32 current_points = 5;
+}
+
+message CardPlay {
+  int32 position = 1;
+  Card card = 2;
+}
+
+message RoundScore {
+  int32 position = 1;
+  int32 points_change = 2;
+  int32 points_after = 3;
+  int32 tricks_won = 4;
+  bool is_penalty = 5;
+  bool is_party_player = 6;
+}
+
+message FinalScore {
+  int32 position = 1;
+  string user_id = 2;
+  int32 final_points = 3;
+  double prize_won = 4;
+}

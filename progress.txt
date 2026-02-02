@@ -166,3 +166,63 @@
 - Create ApplicationDbContext and EF Core migrations
 - Implement repository interfaces and patterns
 - Add integration tests for entity validation rules
+
+## 2026-02-02 - Issue #11: Define REST API and gRPC contracts
+
+### What was implemented
+- Created comprehensive API specification documentation in docs/api-specification.md (60KB+)
+- Documented complete REST API with OpenAPI-style specification covering authentication, game management, and gameplay endpoints
+- Created gRPC service definition file (backend/SobeSobe.Api/Protos/game-events.proto) for real-time bidirectional communication
+- Defined 5 authentication endpoints (register, login, refresh, logout, get user)
+- Defined 3 user management endpoints (get profile, update profile, get statistics)
+- Defined 7 game lobby endpoints (list games, create, get details, join, leave, cancel, start)
+- Defined 5 game action endpoints (get state, select trump, play decision, exchange cards, play card, get scores)
+- Created gRPC service with 3 RPC methods (Subscribe, SendAction, Heartbeat) and 13 event types
+- Documented 25+ error codes with detailed error response standards
+- Defined comprehensive validation rules for all game actions aligned with game rules
+- Included detailed request/response examples for all endpoints
+- Documented error response format with contextual details for debugging
+
+**API Architecture:**
+- REST API for stateless operations (authentication, game management, query operations)
+- gRPC for real-time bidirectional events (card plays, trick completion, score updates, game state changes)
+- OAuth 2.0 / OpenID Connect with JWT Bearer tokens (15-min access, 7-day refresh)
+- Consistent error response format with error codes, messages, details, and timestamps
+- API versioning with /api/v1 prefix
+
+**gRPC Events:**
+- PlayerJoined/Left, GameStarted, RoundStarted
+- TrumpSelected, CardDealt, PlayDecision, CardsExchanged
+- CardPlayed, TrickCompleted, RoundCompleted, GameCompleted
+- PlayerTurn (with action_required and timeout), Error events
+
+**Validation Highlights:**
+- Trump selection: Only party player, Hearts-only before dealing (4-point tricks), Clubs forces all players
+- Player decisions: Max 2 consecutive sit-outs, party/dealer cannot opt out
+- Card exchange: 0-3 cards, cannot exchange Ace of trump
+- Trick-taking: Follow suit, trump escalation, mandatory Ace of trump rules
+- Scoring: Tricks reduce points, zero-trick penalties (5/10/20 points), party player double penalty
+
+### Files changed
+- Modified: docs/api-specification.md (replaced placeholder with 60KB+ comprehensive API documentation)
+- Created: backend/SobeSobe.Api/Protos/game-events.proto (gRPC service definition with 240+ lines)
+
+### Learnings
+- REST API ideal for stateless operations (create game, join, query state), gRPC for real-time push notifications
+- Error responses should include contextual details (e.g., cards in hand that satisfy rule for "must follow suit" errors)
+- JWT short-lived access tokens (15 min) + long-lived refresh tokens (7 days) balance security and UX
+- gRPC oneof payload pattern allows single GameEvent message with polymorphic payloads for different event types
+- Validation rules must enforce game rules (trump escalation, Ace of trump, follow suit) at API boundary
+- API versioning (/api/v1) allows future breaking changes without disrupting existing clients
+- Protobuf map<string, string> for error details provides flexibility for different error scenarios
+- Heartbeat RPC keeps long-lived gRPC connections alive and detects disconnections
+- Card exchange endpoint returns full updated hand to avoid client-side state synchronization bugs
+- GET /games endpoint needs pagination to handle potentially large game lists
+
+### Next steps
+- Issue #14: Configure GitHub Actions for CI/CD (setup automated build/test/deploy)
+- Issue #15: Create UI/UX wireframes and mockups (now have complete API contracts to inform frontend design)
+- Implement REST endpoints in SobeSobe.Api with ASP.NET Core Minimal API
+- Implement gRPC service in SobeSobe.Api with Grpc.AspNetCore
+- Create DTO classes for request/response models
+- Implement JWT authentication with ASP.NET Core Identity
