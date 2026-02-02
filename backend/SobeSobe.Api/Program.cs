@@ -7,6 +7,7 @@ using SobeSobe.Api.DTOs;
 using SobeSobe.Api.Services;
 using SobeSobe.Core.Entities;
 using SobeSobe.Core.Enums;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -57,6 +58,7 @@ app.MapDefaultEndpoints();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 app.UseHttpsRedirection();
@@ -68,7 +70,7 @@ app.UseAuthorization();
 app.MapPost("/api/auth/login", async (LoginRequest request, ApplicationDbContext db, JwtTokenService jwtService) =>
 {
     // Find user by username or email
-    var user = await db.Users.FirstOrDefaultAsync(u => 
+    var user = await db.Users.FirstOrDefaultAsync(u =>
         u.Username == request.UsernameOrEmail || u.Email == request.UsernameOrEmail);
 
     if (user == null)
@@ -112,8 +114,7 @@ app.MapPost("/api/auth/login", async (LoginRequest request, ApplicationDbContext
 
     return Results.Ok(response);
 })
-.WithName("LoginUser")
-.WithOpenApi();
+.WithName("LoginUser");
 
 // Token Refresh endpoint
 app.MapPost("/api/auth/refresh", async (RefreshTokenRequest request, JwtTokenService jwtService) =>
@@ -144,8 +145,7 @@ app.MapPost("/api/auth/refresh", async (RefreshTokenRequest request, JwtTokenSer
 
     return Results.Ok(response);
 })
-.WithName("RefreshToken")
-.WithOpenApi();
+.WithName("RefreshToken");
 
 // Logout endpoint
 app.MapPost("/api/auth/logout", async (LogoutRequest request, JwtTokenService jwtService) =>
@@ -155,8 +155,7 @@ app.MapPost("/api/auth/logout", async (LogoutRequest request, JwtTokenService jw
 
     return Results.Ok(new { message = "Logged out successfully" });
 })
-.WithName("Logout")
-.WithOpenApi();
+.WithName("Logout");
 
 // Get Current User endpoint (requires authentication)
 app.MapGet("/api/auth/user", async (HttpContext httpContext, ApplicationDbContext db) =>
@@ -192,8 +191,7 @@ app.MapGet("/api/auth/user", async (HttpContext httpContext, ApplicationDbContex
     return Results.Ok(userResponse);
 })
 .RequireAuthorization()
-.WithName("GetCurrentUser")
-.WithOpenApi();
+.WithName("GetCurrentUser");
 
 // User Registration endpoint
 app.MapPost("/api/users/register", async (RegisterUserRequest request, ApplicationDbContext db) =>
@@ -242,8 +240,7 @@ app.MapPost("/api/users/register", async (RegisterUserRequest request, Applicati
 
     return Results.Created($"/api/users/{user.Id}", userResponse);
 })
-.WithName("RegisterUser")
-.WithOpenApi();
+.WithName("RegisterUser");
 
 // List Games endpoint (public)
 app.MapGet("/api/games", async (
@@ -328,8 +325,7 @@ app.MapGet("/api/games", async (
 
     return Results.Ok(response);
 })
-.WithName("ListGames")
-.WithOpenApi();
+.WithName("ListGames");
 
 // Create Game endpoint (requires authentication)
 app.MapPost("/api/games", async (CreateGameRequest request, HttpContext httpContext, ApplicationDbContext db) =>
@@ -411,7 +407,6 @@ app.MapPost("/api/games", async (CreateGameRequest request, HttpContext httpCont
     return Results.Created($"/api/games/{game.Id}", gameResponse);
 })
 .RequireAuthorization()
-.WithName("CreateGame")
-.WithOpenApi();
+.WithName("CreateGame");
 
 app.Run();
