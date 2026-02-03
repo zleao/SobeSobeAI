@@ -4,7 +4,7 @@
       <h1 class="text-2xl font-bold text-gray-800">Sobe Sobe - Game Lobby</h1>
       <div class="flex items-center gap-4">
         @if (authService.currentUser(); as user) {
-          <span class="text-gray-700">Welcome, {{ user.displayName }}</span>
+          <span class="text-gray-700">Welcome, <span class="font-medium">{{ user.displayName }}</span></span>
           <button
             (click)="onLogout()"
             class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition"
@@ -17,14 +17,91 @@
   </nav>
 
   <div class="max-w-7xl mx-auto p-6">
-    <div class="bg-white rounded-lg shadow-md p-6">
-      <h2 class="text-xl font-bold mb-4">Game Lobby</h2>
-      <p class="text-gray-600">
-        Welcome to Sobe Sobe! The game lobby will be implemented here.
-      </p>
-      <p class="text-gray-500 mt-2 text-sm">
-        Authentication is working! You are logged in.
-      </p>
+    @if (errorMessage()) {
+      <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        {{ errorMessage() }}
+      </div>
+    }
+
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-2xl font-bold text-gray-800">Available Games</h2>
+      <button
+        (click)="onCreateGame()"
+        [disabled]="isLoading()"
+        class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 disabled:bg-gray-400 transition"
+      >
+        @if (isLoading()) {
+          <span>Creating...</span>
+        } @else {
+          <span>+ Create Game</span>
+        }
+      </button>
     </div>
+
+    @if (isLoading() && games().length === 0) {
+      <div class="text-center py-12">
+        <p class="text-gray-600">Loading games...</p>
+      </div>
+    } @else if (games().length === 0) {
+      <div class="bg-white rounded-lg shadow-md p-8 text-center">
+        <p class="text-gray-600 text-lg">No games available.</p>
+        <p class="text-gray-500 mt-2">Create a new game to get started!</p>
+      </div>
+    } @else {
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        @for (game of games(); track game.id) {
+          <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition">
+            <div class="flex justify-between items-start mb-4">
+              <div>
+                <h3 class="text-lg font-bold text-gray-800">
+                  Game by {{ game.createdBy.displayName }}
+                </h3>
+                <p class="text-sm text-gray-500">{{ game.createdAt | date:'short' }}</p>
+              </div>
+              <span class="px-3 py-1 text-xs font-medium rounded-full"
+                [class.bg-yellow-100]="game.status === 0"
+                [class.text-yellow-800]="game.status === 0"
+                [class.bg-green-100]="game.status === 1"
+                [class.text-green-800]="game.status === 1"
+              >
+                {{ getStatusLabel(game.status) }}
+              </span>
+            </div>
+
+            <div class="mb-4">
+              <div class="flex items-center gap-2 text-gray-700">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                </svg>
+                <span>{{ game.currentPlayers }} / {{ game.maxPlayers }} players</span>
+              </div>
+              
+              @if (game.players.length > 0) {
+                <div class="mt-2 flex flex-wrap gap-1">
+                  @for (player of game.players; track player.position) {
+                    <span class="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                      {{ player.displayName }}
+                    </span>
+                  }
+                </div>
+              }
+            </div>
+
+            <button
+              (click)="onJoinGame(game.id)"
+              [disabled]="game.currentPlayers >= game.maxPlayers"
+              class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+            >
+              @if (game.currentPlayers >= game.maxPlayers) {
+                <span>Game Full</span>
+              } @else {
+                <span>Join Game</span>
+              }
+            </button>
+          </div>
+        }
+      </div>
+    }
   </div>
 </div>

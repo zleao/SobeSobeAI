@@ -1523,3 +1523,56 @@
 - Add loading states for all async operations
 - Test responsive design on mobile devices
 
+## 2026-02-03 - Issue #4: Frontend Development - Game Lobby List Implementation
+
+### What was implemented
+- Created Game service for API integration
+  - listGames() with pagination and status filtering
+  - createGame() with maxPlayers parameter
+  - getGame(), joinGame(), leaveGame() methods
+  - TypeScript interfaces for all API DTOs (GameListItem, GameResponse, PlayerSessionResponse)
+- Updated Lobby component to display game list
+  - OnInit lifecycle hook to load games on component initialization
+  - signal-based state for games list, loading, and error states
+  - Create game button with loading state
+  - Join game functionality with full game validation
+  - Responsive grid layout (1/2/3 columns based on screen size)
+- Enhanced Lobby template with comprehensive game cards
+  - Game cards show creator, creation time, status badge, player count
+  - Player list with blue badges showing display names
+  - Status badges (yellow for Waiting, green for In Progress)
+  - Icons for visual clarity (users icon for player count)
+  - Join game button disabled when game is full
+  - Empty state message when no games available
+- Integrated with backend REST API (/api/games)
+- All API calls use authentication via authInterceptor
+- Frontend builds successfully (304.02 kB bundle)
+
+### Files changed
+- Created: frontend/src/app/services/game.ts (Game service with 5 methods and 8 interfaces)
+- Modified: frontend/src/app/pages/lobby/lobby.ts (added game list logic with signals)
+- Modified: frontend/src/app/pages/lobby/lobby.html (comprehensive lobby UI with game cards)
+
+### Learnings
+- Angular signals provide reactive updates for game list without manual change detection
+- OnInit lifecycle hook ideal for initial data loading
+- HTTP errors can be caught in subscribe error callback
+- Tailwind grid layout: grid-cols-1 md:grid-cols-2 lg:grid-cols-3 for responsive design
+- SVG icons inline in templates for better performance than icon fonts
+- @for track syntax requires unique identifier (game.id) for efficient rendering
+- Class binding with multiple conditions: [class.bg-yellow-100]="condition"
+- Button disabled state prevents clicks and changes visual appearance
+- Empty state messaging improves UX when no data available
+- Game service returns Observable<T> for consistent async handling
+
+### Next steps
+- Create game room (waiting area) component for players to see who joined
+- Implement start game functionality (game creator only)
+- Add real-time updates when players join/leave (gRPC integration)
+- Implement game board component for active gameplay
+- Add pagination controls for game list (currently showing all waiting games)
+- Add filters for game status (show completed/in-progress games)
+- Add refresh button to manually reload game list
+- Implement leave game functionality in game room
+- Add player avatars when backend supports avatar uploads
+
