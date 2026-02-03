@@ -24,11 +24,11 @@ public class TrickTakingServiceTests
         var player2 = Guid.NewGuid();
         var player3 = Guid.NewGuid();
 
-        var cardsPlayed = new List<(Guid PlayerSessionId, Card Card)>
+        var cardsPlayed = new List<CardPlayed>
         {
-            (player1, new Card { Suit = "Hearts", Value = "5" }),     // Trump but low
-            (player2, new Card { Suit = "Hearts", Value = "Ace" }),   // Trump and highest (Ace = 10)
-            (player3, new Card { Suit = "Hearts", Value = "7" })      // Trump but medium (7 = 9)
+            new CardPlayed { PlayerSessionId = player1, Card = new Card { Suit = "Hearts", Rank = "5" } },     // Trump but low
+            new CardPlayed { PlayerSessionId = player2, Card = new Card { Suit = "Hearts", Rank = "Ace" } },   // Trump and highest (Ace = 10)
+            new CardPlayed { PlayerSessionId = player3, Card = new Card { Suit = "Hearts", Rank = "7" } }      // Trump but medium (7 = 9)
         };
 
         var trumpSuit = TrumpSuit.Hearts;
@@ -48,11 +48,11 @@ public class TrickTakingServiceTests
         var player2 = Guid.NewGuid();
         var player3 = Guid.NewGuid();
 
-        var cardsPlayed = new List<(Guid PlayerSessionId, Card Card)>
+        var cardsPlayed = new List<CardPlayed>
         {
-            (player1, new Card { Suit = "Spades", Value = "Ace" }),   // Non-trump, even high value
-            (player2, new Card { Suit = "Hearts", Value = "2" }),     // Trump but lowest rank
-            (player3, new Card { Suit = "Diamonds", Value = "King" }) // Non-trump
+            new CardPlayed { PlayerSessionId = player1, Card = new Card { Suit = "Spades", Rank = "Ace" } },   // Non-trump, even high value
+            new CardPlayed { PlayerSessionId = player2, Card = new Card { Suit = "Hearts", Rank = "2" } },     // Trump but lowest rank
+            new CardPlayed { PlayerSessionId = player3, Card = new Card { Suit = "Diamonds", Rank = "King" } } // Non-trump
         };
 
         var trumpSuit = TrumpSuit.Hearts;
@@ -72,11 +72,11 @@ public class TrickTakingServiceTests
         var player2 = Guid.NewGuid();
         var player3 = Guid.NewGuid();
 
-        var cardsPlayed = new List<(Guid PlayerSessionId, Card Card)>
+        var cardsPlayed = new List<CardPlayed>
         {
-            (player1, new Card { Suit = "Spades", Value = "King" }),   // Lead suit, high
-            (player2, new Card { Suit = "Diamonds", Value = "Ace" }),  // Different suit, can't win
-            (player3, new Card { Suit = "Spades", Value = "5" })       // Lead suit but low
+            new CardPlayed { PlayerSessionId = player1, Card = new Card { Suit = "Spades", Rank = "King" } },   // Lead suit, high
+            new CardPlayed { PlayerSessionId = player2, Card = new Card { Suit = "Diamonds", Rank = "Ace" } },  // Different suit, can't win
+            new CardPlayed { PlayerSessionId = player3, Card = new Card { Suit = "Spades", Rank = "5" } }       // Lead suit but low
         };
 
         var trumpSuit = TrumpSuit.Hearts;
@@ -167,30 +167,41 @@ public class TrickTakingServiceTests
             new PlayerSession { Id = player3Id, UserId = Guid.NewGuid(), GameId = Guid.NewGuid(), Position = 2, CurrentPoints = 10, IsActive = true }
         };
 
-        var trickWinners = new List<Guid> { player1Id, player1Id, player2Id, player2Id, player3Id }; // 5 tricks
+        var roundId = Guid.NewGuid();
+        var tricks = new List<Trick>
+        {
+            new Trick { Id = Guid.NewGuid(), RoundId = roundId, TrickNumber = 1, LeadPlayerSessionId = player1Id, WinnerPlayerSessionId = player1Id, CardsPlayedJson = "[]", CompletedAt = DateTime.UtcNow },
+            new Trick { Id = Guid.NewGuid(), RoundId = roundId, TrickNumber = 2, LeadPlayerSessionId = player1Id, WinnerPlayerSessionId = player1Id, CardsPlayedJson = "[]", CompletedAt = DateTime.UtcNow },
+            new Trick { Id = Guid.NewGuid(), RoundId = roundId, TrickNumber = 3, LeadPlayerSessionId = player1Id, WinnerPlayerSessionId = player2Id, CardsPlayedJson = "[]", CompletedAt = DateTime.UtcNow },
+            new Trick { Id = Guid.NewGuid(), RoundId = roundId, TrickNumber = 4, LeadPlayerSessionId = player2Id, WinnerPlayerSessionId = player2Id, CardsPlayedJson = "[]", CompletedAt = DateTime.UtcNow },
+            new Trick { Id = Guid.NewGuid(), RoundId = roundId, TrickNumber = 5, LeadPlayerSessionId = player2Id, WinnerPlayerSessionId = player3Id, CardsPlayedJson = "[]", CompletedAt = DateTime.UtcNow }
+        };
         var trickValue = 2;
         var partyPlayerSessionId = player1Id;
 
         // Act
-        var scores = _service.CalculateRoundScores(playerSessions, trickWinners, trickValue, partyPlayerSessionId);
+        var scores = _service.CalculateRoundScores(playerSessions, tricks, trickValue, partyPlayerSessionId);
 
         // Assert
         Assert.Equal(3, scores.Count);
 
-        // Player 1 won 2 tricks: 20 - (2 * 2) = 16 points
+        // Player 1 won 2 tricks: -4 points (2 * 2)
         var player1Score = scores.First(s => s.PlayerSessionId == player1Id);
+        Assert.Equal(2, player1Score.TricksWon);
         Assert.Equal(-4, player1Score.PointsChange);
-        Assert.Equal(16, playerSessions.First(ps => ps.Id == player1Id).CurrentPoints);
+        Assert.Equal(ScoreReason.TricksWon, player1Score.Reason);
 
-        // Player 2 won 2 tricks: 15 - (2 * 2) = 11 points
+        // Player 2 won 2 tricks: -4 points (2 * 2)
         var player2Score = scores.First(s => s.PlayerSessionId == player2Id);
+        Assert.Equal(2, player2Score.TricksWon);
         Assert.Equal(-4, player2Score.PointsChange);
-        Assert.Equal(11, playerSessions.First(ps => ps.Id == player2Id).CurrentPoints);
+        Assert.Equal(ScoreReason.TricksWon, player2Score.Reason);
 
-        // Player 3 won 1 trick: 10 - (1 * 2) = 8 points
+        // Player 3 won 1 trick: -2 points (1 * 2)
         var player3Score = scores.First(s => s.PlayerSessionId == player3Id);
+        Assert.Equal(1, player3Score.TricksWon);
         Assert.Equal(-2, player3Score.PointsChange);
-        Assert.Equal(8, playerSessions.First(ps => ps.Id == player3Id).CurrentPoints);
+        Assert.Equal(ScoreReason.TricksWon, player3Score.Reason);
     }
 
     [Fact(DisplayName = "Player with zero tricks receives normal penalty")]
@@ -208,18 +219,26 @@ public class TrickTakingServiceTests
             new PlayerSession { Id = partyPlayerId, UserId = Guid.NewGuid(), GameId = Guid.NewGuid(), Position = 2, CurrentPoints = 10, IsActive = true }
         };
 
-        var trickWinners = new List<Guid> { player1Id, player1Id, player1Id, partyPlayerId, partyPlayerId }; // Player 2 won nothing
+        var roundId = Guid.NewGuid();
+        var tricks = new List<Trick>
+        {
+            new Trick { Id = Guid.NewGuid(), RoundId = roundId, TrickNumber = 1, LeadPlayerSessionId = player1Id, WinnerPlayerSessionId = player1Id, CardsPlayedJson = "[]", CompletedAt = DateTime.UtcNow },
+            new Trick { Id = Guid.NewGuid(), RoundId = roundId, TrickNumber = 2, LeadPlayerSessionId = player1Id, WinnerPlayerSessionId = player1Id, CardsPlayedJson = "[]", CompletedAt = DateTime.UtcNow },
+            new Trick { Id = Guid.NewGuid(), RoundId = roundId, TrickNumber = 3, LeadPlayerSessionId = player1Id, WinnerPlayerSessionId = player1Id, CardsPlayedJson = "[]", CompletedAt = DateTime.UtcNow },
+            new Trick { Id = Guid.NewGuid(), RoundId = roundId, TrickNumber = 4, LeadPlayerSessionId = partyPlayerId, WinnerPlayerSessionId = partyPlayerId, CardsPlayedJson = "[]", CompletedAt = DateTime.UtcNow },
+            new Trick { Id = Guid.NewGuid(), RoundId = roundId, TrickNumber = 5, LeadPlayerSessionId = partyPlayerId, WinnerPlayerSessionId = partyPlayerId, CardsPlayedJson = "[]", CompletedAt = DateTime.UtcNow }
+        };
         var trickValue = 2; // Penalty: 10 points
         var partyPlayerSessionId = partyPlayerId;
 
         // Act
-        var scores = _service.CalculateRoundScores(playerSessions, trickWinners, trickValue, partyPlayerSessionId);
+        var scores = _service.CalculateRoundScores(playerSessions, tricks, trickValue, partyPlayerSessionId);
 
         // Assert
         var player2Score = scores.First(s => s.PlayerSessionId == player2Id);
+        Assert.Equal(0, player2Score.TricksWon);
         Assert.Equal(10, player2Score.PointsChange); // Penalty adds points
         Assert.Equal(ScoreReason.NoTricksNormalPenalty, player2Score.Reason);
-        Assert.Equal(25, playerSessions.First(ps => ps.Id == player2Id).CurrentPoints);
     }
 
     [Fact(DisplayName = "Party player with zero tricks receives double penalty")]
@@ -237,18 +256,26 @@ public class TrickTakingServiceTests
             new PlayerSession { Id = partyPlayerId, UserId = Guid.NewGuid(), GameId = Guid.NewGuid(), Position = 2, CurrentPoints = 10, IsActive = true }
         };
 
-        var trickWinners = new List<Guid> { player1Id, player1Id, player1Id, player2Id, player2Id }; // Party player won nothing
+        var roundId = Guid.NewGuid();
+        var tricks = new List<Trick>
+        {
+            new Trick { Id = Guid.NewGuid(), RoundId = roundId, TrickNumber = 1, LeadPlayerSessionId = player1Id, WinnerPlayerSessionId = player1Id, CardsPlayedJson = "[]", CompletedAt = DateTime.UtcNow },
+            new Trick { Id = Guid.NewGuid(), RoundId = roundId, TrickNumber = 2, LeadPlayerSessionId = player1Id, WinnerPlayerSessionId = player1Id, CardsPlayedJson = "[]", CompletedAt = DateTime.UtcNow },
+            new Trick { Id = Guid.NewGuid(), RoundId = roundId, TrickNumber = 3, LeadPlayerSessionId = player1Id, WinnerPlayerSessionId = player1Id, CardsPlayedJson = "[]", CompletedAt = DateTime.UtcNow },
+            new Trick { Id = Guid.NewGuid(), RoundId = roundId, TrickNumber = 4, LeadPlayerSessionId = player2Id, WinnerPlayerSessionId = player2Id, CardsPlayedJson = "[]", CompletedAt = DateTime.UtcNow },
+            new Trick { Id = Guid.NewGuid(), RoundId = roundId, TrickNumber = 5, LeadPlayerSessionId = player2Id, WinnerPlayerSessionId = player2Id, CardsPlayedJson = "[]", CompletedAt = DateTime.UtcNow }
+        };
         var trickValue = 2; // Normal penalty: 10, double: 20
         var partyPlayerSessionId = partyPlayerId;
 
         // Act
-        var scores = _service.CalculateRoundScores(playerSessions, trickWinners, trickValue, partyPlayerSessionId);
+        var scores = _service.CalculateRoundScores(playerSessions, tricks, trickValue, partyPlayerSessionId);
 
         // Assert
         var partyScore = scores.First(s => s.PlayerSessionId == partyPlayerId);
+        Assert.Equal(0, partyScore.TricksWon);
         Assert.Equal(20, partyScore.PointsChange); // Double penalty (2 * 10)
         Assert.Equal(ScoreReason.NoTricksPartyPenalty, partyScore.Reason);
-        Assert.Equal(30, playerSessions.First(ps => ps.Id == partyPlayerId).CurrentPoints);
     }
 
     #endregion

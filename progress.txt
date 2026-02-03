@@ -1288,3 +1288,37 @@
 - Consider implementing SendAction RPC for full bidirectional communication
 - Add integration tests for gRPC subscription and event broadcasting
 - Test with multiple concurrent subscribers (5 players)
+## 2026-02-03 - Issue #7: Testing - Fixed TrickTakingService Unit Tests
+
+### What was implemented
+- Fixed 14 failing unit tests for TrickTakingService
+- Updated Card value object usage: changed Value property to Rank property (e.g., Value = "Ace" → Rank = "Ace")
+- Updated DetermineTrickWinner test parameter types: changed from List<(Guid, Card)> tuples to List<CardPlayed> objects
+- Updated CalculateRoundScores test parameter types: changed from List<Guid> trick winners to List<Trick> entities
+- Fixed test assertions: CalculateRoundScores returns score changes only, doesn't mutate PlayerSession.CurrentPoints
+- All 14 tests now pass: 3 DetermineTrickWinner tests, 4 GetNextPlayerPosition tests, 3 CalculateRoundScores tests, 3 IsGameComplete tests
+- Test coverage enabled with XPlat Code Coverage
+
+### Files changed
+- Modified: backend/SobeSobe.Tests/Services/TrickTakingServiceTests.cs (updated 3 test methods, fixed Card properties and parameter types)
+
+### Learnings
+- Card record uses Rank property not Value (follows card game terminology: Ace, 7, King, Queen, Jack, 6, 5, 4, 3, 2)
+- CardPlayed is a class with PlayerSessionId and Card properties, not a tuple
+- Trick entity stores winner in WinnerPlayerSessionId property, used for counting tricks won
+- CalculateRoundScores is a pure function - returns score deltas without mutating input PlayerSession objects
+- The actual point updates happen in the play-card endpoint after CalculateRoundScores returns
+- Test methods follow naming convention: MethodName_Condition_ExpectedResult()
+- xUnit DisplayName attribute provides readable test names in test output
+- Existing tests were comprehensive: covered trick winner logic, player rotation, scoring (normal and penalties), and game completion
+- Tests verify business rules: trump beats non-trump, highest trump wins, zero-trick penalties, party player double penalties
+- Build succeeds with 0 errors, all 14 tests pass
+
+### Next steps
+- Add unit tests for Card value object validation methods (IsValid, GetRankValue)
+- Add unit tests for PasswordHasher service (hash generation, verification)
+- Add integration tests for authentication endpoints (register, login, refresh, logout)
+- Add integration tests for game management endpoints (create, join, leave, start)
+- Add integration tests for game action endpoints (trump selection, play decision, card exchange, play card)
+- Measure code coverage percentage and target 80%+ for game logic
+- Add performance tests for concurrent game scenarios
