@@ -1322,3 +1322,47 @@
 - Add integration tests for game action endpoints (trump selection, play decision, card exchange, play card)
 - Measure code coverage percentage and target 80%+ for game logic
 - Add performance tests for concurrent game scenarios
+## 2026-02-03 - Issue #7: Testing - Added Unit Tests for Card and PasswordHasher
+
+### What was implemented
+- Added 33 unit tests for Card value object (backend/SobeSobe.Tests/ValueObjects/CardTests.cs)
+- Added 22 unit tests for PasswordHasher service (backend/SobeSobe.Tests/Services/PasswordHasherTests.cs)
+- Removed placeholder test file (UnitTest1.cs)
+- All 69 unit tests pass successfully (14 TrickTakingService + 33 Card + 22 PasswordHasher)
+
+**Card value object tests (33 total):**
+- IsValid validation: 6 tests (valid card, invalid suit, invalid rank, all valid suits theory, all valid ranks theory)
+- GetRankValue ranking: 11 tests (Ace highest=10, 7 second=9, 2 lowest=1, all ranks theory, invalid rank=0)
+- ToString formatting: 1 test (formatted card string)
+- Record equality: 3 tests (same values equal, different suit not equal, different rank not equal)
+
+**PasswordHasher service tests (22 total):**
+- HashPassword generation: 5 tests (non-empty hash, different hashes for same password, 48-byte hash format, various password formats theory)
+- VerifyPassword validation: 9 tests (correct password, incorrect password, case-sensitive, various formats theory, empty password, invalid hash format, too short hash)
+- Integration workflows: 2 tests (hash and verify end-to-end, multiple hashes verify correctly)
+
+### Files changed
+- Created: backend/SobeSobe.Tests/ValueObjects/CardTests.cs (33 tests covering all Card methods and properties)
+- Created: backend/SobeSobe.Tests/Services/PasswordHasherTests.cs (22 tests covering hash generation and verification)
+- Deleted: backend/SobeSobe.Tests/UnitTest1.cs (placeholder test file)
+
+### Learnings
+- PasswordHasher is a static class with static methods (HashPassword, VerifyPassword)
+- Card record type provides automatic value equality (== operator works for value comparison)
+- Record types are immutable by design (with init accessors)
+- PBKDF2 hash format: 16-byte salt + 32-byte hash = 48 bytes total (encoded as base64 string)
+- Different salts generated for each password hash ensure rainbow table resistance
+- GetRankValue returns 0 for invalid ranks (defensive programming)
+- xUnit Theory tests with InlineData allow parameterized testing (all suits, all ranks, various password formats)
+- Test method DisplayName attribute provides human-readable test names in output
+- Tests verify security properties: case-sensitivity, salt uniqueness, constant-time comparison
+- All 69 unit tests run in <1 second (fast test execution)
+
+### Next steps
+- Add unit tests for CardDealingService (deck creation, shuffling, dealing logic)
+- Add integration tests for authentication endpoints (register, login, refresh, logout)
+- Add integration tests for game management endpoints (create, join, leave, start)
+- Add integration tests for game action endpoints (trump selection, play decision, card exchange, play card)
+- Measure code coverage percentage with reportgenerator tool (target 80%+)
+- Add performance tests for concurrent game scenarios
+- Set up code coverage reporting in CI/CD pipeline
