@@ -1179,3 +1179,72 @@
 - Consider adding endpoint to start new round after current round completes
 - Test complete game flow: register → login → create → join → start → select trump → deal → exchange → play all 5 tricks → verify scores
 
+
+## 2026-02-03 - Issue #6: Real-time Communication - gRPC Service Implementation (Tracer Bullet)
+
+### What was implemented
+- Implemented gRPC GameEvents service for real-time bidirectional communication
+- Created GameEventsService with Subscribe, SendAction, and Heartbeat RPC methods
+- Fixed proto enum conflict (added ACTION_ prefix to ActionType enum values)
+- Implemented authentication validation for gRPC subscribers using JWT tokens
+- Created thread-safe subscriber tracking with ConcurrentDictionary and ConcurrentBag
+- Subscribe endpoint validates: JWT token, game exists, user is player in game
+- Sends connection confirmation event on successful subscription
+- Keeps stream open until client disconnects or cancellation requested
+- Static BroadcastGameEventAsync method for broadcasting events to all subscribers
+- Created GameEventExtensions helper class with methods for all event types:
+  - BroadcastPlayerJoinedAsync
+  - BroadcastPlayerLeftAsync
+  - BroadcastGameStartedAsync
+  - BroadcastTrumpSelectedAsync
+  - BroadcastCardPlayedAsync
+  - BroadcastTrickCompletedAsync
+  - BroadcastRoundCompletedAsync
+  - BroadcastGameCompletedAsync
+- Configured gRPC services in Program.cs with builder.Services.AddGrpc()
+- Mapped gRPC service endpoint with app.MapGrpcService<GameEventsService>()
+- Created comprehensive documentation (docs/grpc-realtime-events.md) with:
+  - Service definition overview
+  - Authentication requirements
+  - Event types and payloads
+  - Client implementation examples
+  - Testing guide with grpcurl
+  - Security considerations
+  - Next steps for integration
+
+### Files changed
+- Modified: backend/SobeSobe.Api/Protos/game-events.proto (fixed enum conflict: SELECT_TRUMP → ACTION_SELECT_TRUMP, etc.)
+- Modified: backend/SobeSobe.Api/SobeSobe.Api.csproj (added Protobuf item group for proto compilation)
+- Created: backend/SobeSobe.Api/Services/GameEventsService.cs (gRPC service implementation, 200+ lines)
+- Created: backend/SobeSobe.Api/Extensions/GameEventExtensions.cs (helper methods for broadcasting events, 200+ lines)
+- Modified: backend/SobeSobe.Api/Program.cs (added gRPC services and mapped gRPC endpoint)
+- Created: docs/grpc-realtime-events.md (comprehensive gRPC documentation, 8KB)
+
+### Learnings
+- Protobuf enum values must be unique across all enums in same package (C++ scoping rules)
+- Adding ACTION_ prefix to ActionType enum values avoids conflicts with EventType
+- gRPC service requires Grpc.AspNetCore NuGet package (version 2.71.0)
+- Protobuf files compiled with <Protobuf Include="..." GrpcServices="Server" />
+- IServerStreamWriter<T> used for streaming responses to clients
+- ServerCallContext provides cancellation token for detecting client disconnections
+- ConcurrentDictionary<string, ConcurrentBag<T>> thread-safe for tracking multiple subscribers per game
+- JWT validation in gRPC uses same logic as REST API (ValidateTokenAsync with TokenValidationParameters)
+- Google.Protobuf.WellKnownTypes.Timestamp.FromDateTime() converts DateTime to proto Timestamp
+- RpcException with StatusCode.Unauthenticated/NotFound/PermissionDenied for error responses
+- Static BroadcastGameEventAsync method allows REST endpoints to broadcast events
+- MapGrpcService<T>() registers gRPC service endpoints in Minimal API
+- gRPC endpoints use HTTP/2 protocol (requires HTTPS in production)
+- ConcurrentBag doesn't support removal - production may need different subscriber tracking mechanism
+- Heartbeat RPC keeps long-lived connections alive and detects disconnections
+- SendAction RPC method placeholder - actions continue through REST API for now
+- Proto file generates strongly-typed C# classes in SobeSobe.Api.Protos namespace
+
+### Next steps
+- Integrate event broadcasting into existing REST endpoints (join, leave, start, trump, play card)
+- Implement SignalR hub as browser-compatible fallback (gRPC-Web alternative)
+- Add connection recovery and reconnection logic documentation for clients
+- Implement subscriber cleanup mechanism for long-lived games
+- Add performance monitoring for gRPC streams
+- Consider implementing SendAction RPC for full bidirectional communication
+- Add integration tests for gRPC subscription and event broadcasting
+- Test with multiple concurrent subscribers (5 players)

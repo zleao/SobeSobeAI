@@ -21,4 +21,9 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\SobeSobe.Core\SobeSobe.Core.csproj" />
+    <ProjectReference Include="..\SobeSobe.Api\SobeSobe.Api.csproj" />
+  </ItemGroup>
+
 </Project>

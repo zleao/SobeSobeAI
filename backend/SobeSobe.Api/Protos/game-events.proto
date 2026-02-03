@@ -179,10 +179,10 @@ message PlayerAction {
 }
 
 enum ActionType {
-  SELECT_TRUMP = 0;
-  PLAY_DECISION = 1;
-  EXCHANGE_CARDS = 2;
-  PLAY_CARD = 3;
+  ACTION_SELECT_TRUMP = 0;
+  ACTION_PLAY_DECISION = 1;
+  ACTION_EXCHANGE_CARDS = 2;
+  ACTION_PLAY_CARD = 3;
 }
 
 message SelectTrumpAction {
