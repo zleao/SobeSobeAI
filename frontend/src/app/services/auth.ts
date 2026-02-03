@@ -41,7 +41,7 @@ export interface User {
   providedIn: 'root',
 })
 export class Auth {
-  private readonly API_URL = 'http://localhost:5175/api';
+  private readonly API_URL = '/api';
   private readonly ACCESS_TOKEN_KEY = 'access_token';
   private readonly REFRESH_TOKEN_KEY = 'refresh_token';
   private readonly USER_KEY = 'user';

@@ -52,7 +52,7 @@ export class GameRoom implements OnInit, OnDestroy {
           
           // If game has started, navigate to game board
           if (game.status === 1) { // InProgress
-            this.router.navigate(['/game', game.id]);
+            this.router.navigate(['/game-board', game.id]);
           }
         },
         error: (err) => {

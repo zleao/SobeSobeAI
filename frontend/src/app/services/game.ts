@@ -64,11 +64,76 @@ export interface PlayerSessionResponse {
   leftAt: string | null;
 }
 
+export interface Card {
+  suit: string; // Hearts, Diamonds, Clubs, Spades
+  rank: string; // Ace, 7, King, Queen, Jack, 6, 5, 4, 3, 2
+}
+
+export interface GameStateResponse {
+  id: string;
+  status: number;
+  maxPlayers: number;
+  currentDealerPosition: number | null;
+  currentRoundNumber: number | null;
+  createdBy: UserSummary;
+  players: PlayerStateResponse[];
+  currentRound: RoundStateResponse | null;
+  myHand: Card[] | null;
+}
+
+export interface PlayerStateResponse {
+  playerSessionId: string;
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  position: number;
+  currentPoints: number;
+  consecutiveRoundsOut: number;
+  joinedAt: string;
+  leftAt: string | null;
+}
+
+export interface RoundStateResponse {
+  roundId: string;
+  roundNumber: number;
+  dealerPosition: number;
+  partyPlayerPosition: number;
+  trumpSuit: string | null;
+  trumpSelectedBeforeDealing: boolean;
+  trickValue: number;
+  currentTrickNumber: number;
+  status: number; // 0=Dealing, 1=TrumpSelection, 2=PlayerDecisions, 3=CardExchange, 4=Playing, 5=Completed
+  tricks: TrickStateResponse[];
+  currentTrick: TrickStateResponse | null;
+}
+
+export interface TrickStateResponse {
+  trickNumber: number;
+  leadPlayerPosition: number;
+  winnerPosition: number | null;
+  cardsPlayed: CardPlayedResponse[];
+}
+
+export interface CardPlayedResponse {
+  position: number;
+  card: Card;
+}
+
+export interface SelectTrumpRequest {
+  trumpSuit: string;
+  selectedBeforeDealing: boolean;
+}
+
+export interface PlayCardRequest {
+  card: Card;
+}
+
 @Injectable({
   providedIn: 'root',
 })
 export class Game {
-  private readonly API_URL = 'http://localhost:5175/api';
+  private readonly API_URL = '/api';
 
   constructor(private http: HttpClient) {}
 
@@ -98,5 +163,17 @@ export class Game {
 
   startGame(id: string): Observable<any> {
     return this.http.post<any>(`${this.API_URL}/games/${id}/start`, {});
+  }
+
+  getGameState(id: string): Observable<GameStateResponse> {
+    return this.http.get<GameStateResponse>(`${this.API_URL}/games/${id}/state`);
+  }
+
+  selectTrump(id: string, request: SelectTrumpRequest): Observable<any> {
+    return this.http.post<any>(`${this.API_URL}/games/${id}/rounds/current/trump`, request);
+  }
+
+  playCard(id: string, request: PlayCardRequest): Observable<any> {
+    return this.http.post<any>(`${this.API_URL}/games/${id}/rounds/current/play-card`, request);
   }
 }
