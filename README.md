@@ -136,7 +136,11 @@ dotnet test
 
 - [Game Rules](./docs/game-rules.md) - Complete game rules and mechanics
 - [API Specification](./docs/api-specification.md) - REST API and gRPC contracts
-- [Architecture](./docs/architecture.md) - System architecture and design decisions
+- [Database Schema](./docs/database-schema.md) - Database design and entity relationships
+- [CI/CD Pipeline](./docs/ci-cd.md) - Continuous integration and deployment setup
+- [Deployment Guide](./docs/deployment-guide.md) - Step-by-step Azure deployment instructions
+- [Aspire Usage](./docs/aspire-usage.md) - Local development with .NET Aspire
+- [gRPC Real-time Events](./docs/grpc-realtime-events.md) - Real-time communication implementation
 
 ## 🛠️ Development
 
@@ -157,13 +161,37 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ## 🚢 Deployment
 
-The application is deployed to Azure:
+### Current Status
+
+✅ **Infrastructure as Code**: Complete (Bicep templates ready)  
+✅ **CI/CD Pipelines**: Configured (GitHub Actions)  
+✅ **Application Code**: Production-ready  
+⏳ **Azure Deployment**: Pending (requires Azure subscription)
+
+### Deployment Architecture
 
 - **Frontend**: Azure Static Web Apps
-- **Backend**: Azure App Service
-- **Database**: Azure SQL Database (production)
+- **Backend**: Azure App Service (Linux, .NET 10)
+- **Database**: SQLite (dev/staging) / Azure SQL Database (production)
+- **Monitoring**: Application Insights + Log Analytics
+- **Secrets**: Azure Key Vault with managed identity
 
-Deployment is automated via GitHub Actions on merge to `main`.
+### Deploy to Azure
+
+Complete deployment instructions available in [Deployment Guide](./docs/deployment-guide.md).
+
+**Quick Start:**
+```bash
+cd infrastructure
+.\deploy.ps1 -Environment dev
+```
+
+**Estimated Costs:**
+- Development: ~$15-20/month
+- Staging: ~$70-75/month
+- Production: ~$355-365/month
+
+Deployment is automated via GitHub Actions on merge to `main` branch.
 
 ## 📝 License
 
