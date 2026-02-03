@@ -1929,3 +1929,41 @@
 - Close Issue #8 as EPIC is complete (infrastructure and documentation ready)
 - Actual deployment to Azure will occur when Azure subscription is available
 - Consider future enhancements: game completion screen, score history component, E2E tests, performance testing
+## 2026-02-03 - Issue #17: [BUG] Fixed player count selection in game creation
+
+### What was implemented
+- Fixed bug where games were always created with 5 players regardless of user preference
+- Added modal dialog for selecting number of players (2-5) when creating a game
+- Implemented openCreateGameModal() and closeCreateGameModal() methods in Lobby component
+- Added selectedMaxPlayers signal to track user's player count selection
+- Updated onCreateGame() method to use selectedMaxPlayers signal value instead of hardcoded 5
+- Added selectMaxPlayers(count: number) method to update player count selection
+- Modal UI features:
+  - Grid layout with 4 buttons for player count selection (2, 3, 4, 5)
+  - Visual feedback: selected count has blue background, unselected have gray
+  - Helper text explaining the purpose of the selection
+  - Cancel and Create Game buttons
+  - Modal overlay with dark background
+- Frontend builds successfully (345.16 kB bundle)
+- All 98 backend tests pass
+
+### Files changed
+- Modified: frontend/src/app/pages/lobby/lobby.ts (added selectedMaxPlayers signal, modal control methods, updated onCreateGame)
+- Modified: frontend/src/app/pages/lobby/lobby.html (added create game modal UI, changed button click to openCreateGameModal)
+
+### Learnings
+- Backend already supported 2-5 players via CreateGameRequest validation (Range(2, 5))
+- The bug was purely frontend: hardcoded createGame(5) call on line 48 of lobby.ts
+- Signal-based state management makes modal visibility and selection tracking clean and reactive
+- Angular @for control flow allows inline array definition: @for (count of [2, 3, 4, 5]; track count)
+- Class binding with ternary conditions provides visual feedback: [class.bg-blue-600]="selectedMaxPlayers() === count"
+- Fixed-position modal with z-50 ensures it appears above all other content
+- Modal UX: clicking Create Game closes modal immediately, showing loading state on main button
+- Default value of 5 players maintained for backward compatibility and common use case
+- Game validation on backend ensures minimum 2 players required to start game
+
+### Next steps
+- Test game creation with different player counts (2, 3, 4, 5)
+- Verify game can be started with minimum 2 players as per backend validation
+- Consider adding keyboard support (Escape to close modal, Enter to confirm)
+- Consider adding game description field in create game modal for future enhancement

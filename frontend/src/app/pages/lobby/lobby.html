@@ -23,10 +23,57 @@
       </div>
     }
 
+    <!-- Create Game Modal -->
+    @if (showCreateGameModal()) {
+      <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+          <h3 class="text-xl font-bold text-gray-800 mb-4">Create New Game</h3>
+          
+          <div class="mb-6">
+            <label class="block text-gray-700 font-medium mb-3">
+              Number of Players (2-5)
+            </label>
+            <div class="grid grid-cols-4 gap-2">
+              @for (count of [2, 3, 4, 5]; track count) {
+                <button
+                  (click)="selectMaxPlayers(count)"
+                  [class.bg-blue-600]="selectedMaxPlayers() === count"
+                  [class.text-white]="selectedMaxPlayers() === count"
+                  [class.bg-gray-200]="selectedMaxPlayers() !== count"
+                  [class.text-gray-800]="selectedMaxPlayers() !== count"
+                  class="py-3 px-4 rounded font-medium hover:bg-blue-500 hover:text-white transition"
+                >
+                  {{ count }}
+                </button>
+              }
+            </div>
+            <p class="text-sm text-gray-600 mt-2">
+              Select the maximum number of players for your game
+            </p>
+          </div>
+
+          <div class="flex gap-3">
+            <button
+              (click)="closeCreateGameModal()"
+              class="flex-1 bg-gray-300 text-gray-800 py-2 rounded hover:bg-gray-400 transition"
+            >
+              Cancel
+            </button>
+            <button
+              (click)="onCreateGame()"
+              class="flex-1 bg-green-600 text-white py-2 rounded hover:bg-green-700 transition"
+            >
+              Create Game
+            </button>
+          </div>
+        </div>
+      </div>
+    }
+
     <div class="flex justify-between items-center mb-6">
       <h2 class="text-2xl font-bold text-gray-800">Available Games</h2>
       <button
-        (click)="onCreateGame()"
+        (click)="openCreateGameModal()"
         [disabled]="isLoading()"
         class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 disabled:bg-gray-400 transition"
       >

@@ -15,6 +15,7 @@ export class Lobby implements OnInit {
   isLoading = signal(false);
   errorMessage = signal<string | null>(null);
   showCreateGameModal = signal(false);
+  selectedMaxPlayers = signal<number>(5);
 
   constructor(
     public authService: Auth,
@@ -43,9 +44,19 @@ export class Lobby implements OnInit {
     });
   }
 
+  openCreateGameModal(): void {
+    this.showCreateGameModal.set(true);
+    this.selectedMaxPlayers.set(5); // Default to 5 players
+  }
+
+  closeCreateGameModal(): void {
+    this.showCreateGameModal.set(false);
+  }
+
   onCreateGame(): void {
     this.isLoading.set(true);
-    this.gameService.createGame(5).subscribe({
+    this.showCreateGameModal.set(false);
+    this.gameService.createGame(this.selectedMaxPlayers()).subscribe({
       next: (game) => {
         this.isLoading.set(false);
         // Navigate to game room after creating
@@ -56,6 +67,10 @@ export class Lobby implements OnInit {
         this.isLoading.set(false);
       }
     });
+  }
+
+  selectMaxPlayers(count: number): void {
+    this.selectedMaxPlayers.set(count);
   }
 
   onJoinGame(gameId: string): void {
