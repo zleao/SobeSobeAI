@@ -1747,3 +1747,46 @@
 - Implement leave game functionality in game room
 - Add player avatars when backend supports avatar uploads
 
+
+## 2026-02-03 - Issue #7: Testing - Added Game Management Integration Tests
+
+### What was implemented
+- Created comprehensive GameManagementIntegrationTests with 17 test cases covering complete game lifecycle
+- Tests verify all game management endpoints: create, list, get details, join, leave, cancel, start
+- Created JoinGameResponse DTO for typed endpoint response (replaced anonymous type)
+- Updated join game endpoint in Program.cs to use JoinGameResponse DTO
+- All 98 tests passing (69 unit + 12 auth integration + 17 game management integration)
+
+**Test coverage added:**
+- Create game: authenticated creation, validation, auto-join creator
+- List games: pagination, multiple games display
+- Get game details: valid ID returns full state, invalid ID returns 404
+- Join game: player joins successfully, duplicate join returns 409, full game returns 400, requires auth
+- Leave game: player removed, creator transfers ownership, last player deletes game
+- Cancel game: creator can delete, non-creator returns 403
+- Start game: creator starts with 2+ players, insufficient players returns 400, non-creator returns 403
+
+### Files changed
+- Created: backend/SobeSobe.Api/DTOs/JoinGameResponse.cs (typed response with GameId and PlayerSession)
+- Created: backend/SobeSobe.Tests/Integration/GameManagementIntegrationTests.cs (17 comprehensive tests, 500+ lines)
+- Modified: backend/SobeSobe.Api/Program.cs (replaced anonymous type with JoinGameResponse)
+
+### Learnings
+- Integration tests verify complete HTTP request/response cycle including routing, auth, validation, and database
+- IAsyncLifetime.InitializeAsync() resets database between test classes for proper isolation
+- Three test users (player1, player2, player3) created in InitializeAsync for multiplayer scenarios
+- GameResponse.CreatedBy is Guid type (not nested object with Id property)
+- ListGamesResponse.Pagination is nested object with TotalItems/TotalPages properties
+- StartGameResponse.Status is string type ("InProgress") not int enum value
+- Authorization header must be set with new AuthenticationHeaderValue("Bearer", token)
+- All create/join/leave/cancel/start operations require authentication (401 if missing)
+- Ownership transfer logic tested: when creator leaves, next player by position becomes owner
+- Game deletion tested: when last player leaves, game automatically deleted
+- Integration tests catch DTO type mismatches that unit tests miss (e.g., Status as string vs int)
+
+### Next steps
+- Add integration tests for game action endpoints (trump selection, play decision, card exchange, play card)
+- Add integration tests for game state and score history endpoints
+- Measure code coverage with reportgenerator and target 80%+ for critical paths
+- Add E2E tests for complete game flow (create → join → start → play → score)
+- Consider adding performance tests for concurrent game scenarios

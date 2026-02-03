@@ -570,7 +570,7 @@ app.MapPost("/api/games/{id:guid}/join", async (Guid id, HttpContext httpContext
         playerSession.Position);
 
     // Return join response
-    var joinResponse = new
+    var joinResponse = new JoinGameResponse
     {
         GameId = game.Id,
         PlayerSession = new PlayerSessionResponse
