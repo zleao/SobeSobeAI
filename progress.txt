@@ -1847,3 +1847,24 @@
 - Implement score history component
 - Consider adding E2E tests with Playwright or Cypress
 - Performance testing with multiple concurrent games
+
+## 2026-02-03 - Code Quality: Fix Null Reference Warning in Score History Endpoint
+
+### What was fixed
+- Fixed CS8602 null reference warning in GET /api/games/{id}/scores endpoint
+- Added null-forgiving operator (!) to PlayerSession in Include() statement
+- Warning was on ThenInclude(ps => ps.User) where ps could theoretically be null
+- Build now completes with 0 warnings, 0 errors
+
+### Files changed
+- Modified: backend/SobeSobe.Api/Program.cs (line 1894: added ! to PlayerSession in Include)
+
+### Learnings
+- EF Core Include() chains can trigger nullable reference warnings even when navigation properties are guaranteed to be loaded
+- Null-forgiving operator (!) appropriate when Include() ensures property is loaded
+- Column 32 in warning refers to position in line, not just character 32
+- Score history endpoint uses eager loading with Include() and ThenInclude() to efficiently load nested navigation properties
+- All 98 tests still pass after fix
+
+### Next steps
+- Continue with remaining enhancements (real-time updates, game completion screen, etc.)

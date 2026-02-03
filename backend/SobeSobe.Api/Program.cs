@@ -1891,8 +1891,8 @@ app.MapGet("/api/games/{id:guid}/scores", async (Guid id, HttpContext httpContex
 
     // Get all score history for this game, ordered chronologically
     var scoreHistory = await db.ScoreHistories
-        .Include(sh => sh.PlayerSession)
-            .ThenInclude(ps => ps.User)
+        .Include(sh => sh.PlayerSession!)
+            .ThenInclude(ps => ps.User!)
         .Include(sh => sh.Round)
         .Where(sh => sh.GameId == id)
         .OrderBy(sh => sh.CreatedAt)
