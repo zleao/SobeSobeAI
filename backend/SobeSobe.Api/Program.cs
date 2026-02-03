@@ -7,6 +7,7 @@ using SobeSobe.Infrastructure.Data;
 using SobeSobe.Api.DTOs;
 using SobeSobe.Api.Options;
 using SobeSobe.Api.Services;
+using SobeSobe.Api.Extensions;
 using SobeSobe.Core.Entities;
 using SobeSobe.Core.Enums;
 using SobeSobe.Core.ValueObjects;
@@ -548,6 +549,14 @@ app.MapPost("/api/games/{id:guid}/join", async (Guid id, HttpContext httpContext
     db.PlayerSessions.Add(playerSession);
     await db.SaveChangesAsync();
 
+    // Broadcast player joined event
+    await GameEventExtensions.BroadcastPlayerJoinedAsync(
+        game.Id.ToString(),
+        user.Id.ToString(),
+        user.Username,
+        user.DisplayName,
+        playerSession.Position);
+
     // Return join response
     var joinResponse = new
     {
@@ -619,6 +628,7 @@ app.MapPost("/api/games/{id:guid}/leave", async (Guid id, HttpContext httpContex
 
     // Remove player session
     playerSession.LeftAt = DateTime.UtcNow;
+    var leavingPosition = playerSession.Position; // Store before removing
     db.PlayerSessions.Remove(playerSession);
 
     // If no players left, delete the game
@@ -628,6 +638,15 @@ app.MapPost("/api/games/{id:guid}/leave", async (Guid id, HttpContext httpContex
     }
 
     await db.SaveChangesAsync();
+
+    // Broadcast player left event (only if game still exists)
+    if (game.PlayerSessions.Count > 1)
+    {
+        await GameEventExtensions.BroadcastPlayerLeftAsync(
+            game.Id.ToString(),
+            userId.ToString(),
+            leavingPosition);
+    }
 
     return Results.Ok(new { message = "Left game successfully" });
 })
@@ -688,6 +707,7 @@ app.MapPost("/api/games/{id:guid}/start", async (Guid id, HttpContext httpContex
     // Find game with player sessions
     var game = await db.Games
         .Include(g => g.PlayerSessions)
+            .ThenInclude(ps => ps.User)
         .FirstOrDefaultAsync(g => g.Id == id);
 
     if (game == null)
@@ -754,6 +774,19 @@ app.MapPost("/api/games/{id:guid}/start", async (Guid id, HttpContext httpContex
     game.CurrentDealerPosition = dealer.Position;
 
     await db.SaveChangesAsync();
+
+    // Broadcast game started event
+    await GameEventExtensions.BroadcastGameStartedAsync(
+        game.Id.ToString(),
+        game.StartedAt.Value,
+        dealer.Position,
+        game.PlayerSessions.Select(ps => (
+            UserId: ps.UserId.ToString(),
+            Username: ps.User!.Username,
+            DisplayName: ps.User!.DisplayName,
+            Position: ps.Position,
+            Points: ps.CurrentPoints
+        )).ToList());
 
     // Return start game response
     var response = new StartGameResponse
@@ -860,6 +893,13 @@ app.MapPost("/api/games/{id:guid}/rounds/current/trump", async (Guid id, SelectT
     }
 
     await db.SaveChangesAsync();
+
+    // Broadcast trump selected event
+    await GameEventExtensions.BroadcastTrumpSelectedAsync(
+        game.Id.ToString(),
+        request.TrumpSuit.ToString(),
+        request.SelectedBeforeDealing,
+        currentRound.TrickValue);
 
     // Return response
     var response = new SelectTrumpResponse
@@ -1458,6 +1498,15 @@ app.MapPost("/api/games/{id:guid}/rounds/current/play-card", async (Guid id, Pla
     {
         // Trick not completed, return next player
         await db.SaveChangesAsync();
+        
+        // Broadcast card played event
+        await GameEventExtensions.BroadcastCardPlayedAsync(
+            game.Id.ToString(),
+            playerSession.Position,
+            request.Card.Rank,
+            request.Card.Suit,
+            currentTrickNumber);
+        
         var nextPosition = trickService.GetNextPlayerPosition(playerSession.Position, activePlayers.Select(p => p.Position).ToList());
 
         return Results.Ok(new PlayCardResponse
@@ -1490,6 +1539,25 @@ app.MapPost("/api/games/{id:guid}/rounds/current/play-card", async (Guid id, Pla
         // Round continues - prepare for next trick
         currentRound.CurrentTrickNumber++;
         await db.SaveChangesAsync();
+
+        // Broadcast card played event
+        await GameEventExtensions.BroadcastCardPlayedAsync(
+            game.Id.ToString(),
+            playerSession.Position,
+            request.Card.Rank,
+            request.Card.Suit,
+            currentTrickNumber);
+
+        // Broadcast trick completed event
+        await GameEventExtensions.BroadcastTrickCompletedAsync(
+            game.Id.ToString(),
+            currentTrickNumber,
+            winnerSession.Position,
+            cardsPlayed.Select(cp => 
+            {
+                var ps = activePlayers.First(p => p.Id == cp.PlayerSessionId);
+                return (Position: ps.Position, Rank: cp.Card.Rank, Suit: cp.Card.Suit);
+            }).ToList());
 
         return Results.Ok(new PlayCardResponse
         {
@@ -1561,6 +1629,59 @@ app.MapPost("/api/games/{id:guid}/rounds/current/play-card", async (Guid id, Pla
     }
 
     await db.SaveChangesAsync();
+
+    // Broadcast card played event
+    await GameEventExtensions.BroadcastCardPlayedAsync(
+        game.Id.ToString(),
+        playerSession.Position,
+        request.Card.Rank,
+        request.Card.Suit,
+        currentTrickNumber);
+
+    // Broadcast trick completed event
+    await GameEventExtensions.BroadcastTrickCompletedAsync(
+        game.Id.ToString(),
+        currentTrickNumber,
+        winnerSession.Position,
+        cardsPlayed.Select(cp => 
+        {
+            var ps = activePlayers.First(p => p.Id == cp.PlayerSessionId);
+            return (Position: ps.Position, Rank: cp.Card.Rank, Suit: cp.Card.Suit);
+        }).ToList());
+
+    // Broadcast round completed event
+    await GameEventExtensions.BroadcastRoundCompletedAsync(
+        game.Id.ToString(),
+        currentRound.Id.ToString(),
+        currentRound.RoundNumber,
+        scoreResponses.Select(s => (
+            Position: s.Position,
+            PointsChange: s.PointsChange,
+            PointsAfter: s.PointsAfter,
+            TricksWon: s.TricksWon,
+            IsPenalty: s.Penalty,
+            IsPartyPlayer: s.IsPartyPlayer
+        )).ToList());
+
+    // Broadcast game completed event if game is over
+    if (gameCompleted)
+    {
+        var winner = game.PlayerSessions
+            .OrderBy(ps => ps.CurrentPoints)
+            .First();
+        
+        await GameEventExtensions.BroadcastGameCompletedAsync(
+            game.Id.ToString(),
+            winner.Position,
+            winner.UserId.ToString(),
+            game.CompletedAt!.Value,
+            game.PlayerSessions.Select(ps => (
+                Position: ps.Position,
+                UserId: ps.UserId.ToString(),
+                FinalPoints: ps.CurrentPoints,
+                PrizeWon: Math.Max(0, 20 - ps.CurrentPoints) * 0.05
+            )).ToList());
+    }
 
     return Results.Ok(new PlayCardResponse
     {

@@ -1,3 +1,43 @@
+## 2026-02-03 - Issue #6: Real-time Communication - gRPC Event Broadcasting Integration
+
+### What was implemented
+- Integrated gRPC event broadcasting into all game action REST endpoints
+- Added `using SobeSobe.Api.Extensions` to import GameEventExtensions
+- Broadcast PlayerJoined event when player joins game
+- Broadcast PlayerLeft event when player leaves game (only if game not deleted)
+- Broadcast GameStarted event with all player info when game starts
+- Broadcast TrumpSelected event when party player selects trump
+- Broadcast CardPlayed event every time a card is played
+- Broadcast TrickCompleted event when trick finishes (all players have played)
+- Broadcast RoundCompleted event with score changes when round finishes (5 tricks)
+- Broadcast GameCompleted event with final scores when game ends (player reaches ≤0 points)
+- Updated start game endpoint to load PlayerSessions with User navigation property (ThenInclude)
+- All event broadcasts use correct method signatures from GameEventExtensions
+- Card positions used instead of UserIds for CardPlayed/TrickCompleted events
+- Prize calculation added to GameCompleted event (€0.05 per remaining point from 20)
+
+### Files changed
+- Modified: backend/SobeSobe.Api/Program.cs (added gRPC event broadcasting to 5 game endpoints)
+
+### Learnings
+- Event broadcasting must happen AFTER SaveChangesAsync to ensure data consistency
+- GameStarted event requires full player list with positions and starting points
+- CardPlayed events use position (0-4) not userId for player identification
+- TrickCompleted needs to map PlayerSessionId to Position for cards played
+- RoundCompleted scores need IsPenalty and IsPartyPlayer flags from scoreResponses
+- GameCompleted calculates prize won: Math.Max(0, 20 - finalPoints) * 0.05
+- PlayerLeft event only broadcast if game still exists (not deleted when last player leaves)
+- Event signatures use tuples with named parameters for clarity
+- Build succeeded after fixing all method signatures to match GameEventExtensions
+- Real-time events now flow from REST API → gRPC service → all subscribed clients
+
+### Next steps
+- Test complete game flow with gRPC client subscribed (verify events received)
+- Consider adding RoundStarted event broadcast when new round begins
+- Add integration tests for event broadcasting
+- Document event flow in docs/grpc-realtime-events.md
+- Test with multiple concurrent clients to verify event fanout
+
 ## 2026-02-02 - Issue #1: Backend Development - Score History Endpoint Implementation
 
 ### What was implemented
