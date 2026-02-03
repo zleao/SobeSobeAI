@@ -1366,3 +1366,59 @@
 - Measure code coverage percentage with reportgenerator tool (target 80%+)
 - Add performance tests for concurrent game scenarios
 - Set up code coverage reporting in CI/CD pipeline
+## 2026-02-03 - Issue #7: Testing - Integration Test Infrastructure (Tracer Bullet)
+
+### What was implemented
+- Created integration test infrastructure using WebApplicationFactory and in-memory database
+- Added Microsoft.AspNetCore.Mvc.Testing (10.0.2) and Microsoft.EntityFrameworkCore.InMemory (10.0.2) packages to test project
+- Added EF Core InMemory provider to API project for test support
+- Created WebApplicationFactoryFixture with configuration-based database provider selection
+- Modified Program.cs to conditionally use InMemory database when UseInMemoryDatabase config is true
+- Made Program class public with partial class declaration for test project access
+- Added InternalsVisibleTo attribute in API project for test project access
+- Created 12 comprehensive authentication integration tests:
+  - Register new user (201 Created)
+  - Duplicate username/email validation (400 Bad Request)
+  - Login with username and email (200 OK with JWT tokens)
+  - Invalid credentials (400 Bad Request)
+  - Refresh token flow (200 OK with new tokens)
+  - Invalid refresh token (400 Bad Request)
+  - Logout revokes token
+  - Get current user without auth (401 Unauthorized)
+  - Get current user with valid token (200 OK)
+  - Complete authentication flow end-to-end
+
+### Files changed
+- Created: backend/SobeSobe.Tests/Integration/WebApplicationFactoryFixture.cs (configuration-based DB provider selection)
+- Created: backend/SobeSobe.Tests/Integration/AuthenticationIntegrationTests.cs (12 comprehensive auth tests)
+- Modified: backend/SobeSobe.Tests/SobeSobe.Tests.csproj (added Microsoft.AspNetCore.Mvc.Testing, EF Core InMemory)
+- Modified: backend/SobeSobe.Api/SobeSobe.Api.csproj (added InternalsVisibleTo, EF Core InMemory)
+- Modified: backend/SobeSobe.Api/Program.cs (conditional DB provider, public partial class)
+
+### Learnings
+- WebApplicationFactory provides isolated test environment with custom service configuration
+- ConfigureAppConfiguration allows overriding config values for tests (UseInMemoryDatabase flag)
+- In-Memory database requires careful lifecycle management - each request must use same DB instance
+- Integration tests validate complete request/response cycle including routing, authentication, validation
+- Tracer bullet approach: implement basic infrastructure first, refine database lifecycle later
+- Test failures reveal database persistence issues between requests in current implementation
+- EF Core InMemory provider needed in both API and Test projects
+- Public partial class Program required for WebApplicationFactory<Program>
+- InternalsVisibleTo allows test project to access internal API members
+
+### Known issues (to be refined)
+- In-Memory database not persisting between HTTP requests in integration tests
+- Tests fail with NotFound/InternalServerError due to empty database on subsequent requests
+- Need to implement shared database instance or test-specific database seeding
+- 11 of 12 authentication tests failing due to database lifecycle issues
+- Only "Get current user without authentication" test passing (doesn't require DB)
+
+### Next steps
+- Fix in-memory database lifecycle: ensure same DB instance used across requests in tests
+- Consider using IClassFixture<T> for shared database context across test methods
+- Add database seeding in WebApplicationFactoryFixture for integration tests
+- Once auth tests pass, add integration tests for game management endpoints
+- Add integration tests for game action endpoints (trump, play, score)
+- Measure code coverage and target 80%+ for critical paths
+- Document integration testing patterns for team
+

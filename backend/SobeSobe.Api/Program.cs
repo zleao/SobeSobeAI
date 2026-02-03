@@ -19,8 +19,18 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 
 // Add database context
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=sobesobe.db"));
+var useInMemoryDatabase = builder.Configuration.GetValue<bool>("UseInMemoryDatabase");
+if (useInMemoryDatabase)
+{
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseInMemoryDatabase("TestDatabase"));
+}
+else
+{
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=sobesobe.db"));
+}
+
 
 // Configure JWT options
 var jwtOptionsSection = builder.Configuration.GetSection(JwtOptions.SectionName);
@@ -1910,3 +1920,6 @@ app.MapGet("/api/games/{id:guid}/scores", async (Guid id, HttpContext httpContex
 .WithName("GetScoreHistory");
 
 app.Run();
+
+// Make Program class accessible to test projects
+public partial class Program { }
