@@ -64,6 +64,87 @@
           </div>
         }
 
+        <!-- Player Decision (opt-in/opt-out) -->
+        @if (gameState()!.currentRound && gameState()!.currentRound!.status === 2) {
+          <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-bold mb-4">Play This Round?</h2>
+            <p class="text-gray-600 mb-6">
+              Decide whether you want to participate in this round. 
+              @if (isPartyPlayer() || isDealer()) {
+                <span class="text-orange-600 font-semibold">You must play this round.</span>
+              } @else if (gameState()!.currentRound!.trumpSuit === 'Clubs') {
+                <span class="text-orange-600 font-semibold">Clubs trump - all players must play!</span>
+              } @else {
+                <span>Consider your hand and current points ({{ getMyPoints() }}).</span>
+              }
+            </p>
+            <div class="grid grid-cols-2 gap-4 max-w-md mx-auto">
+              <button
+                (click)="makePlayDecision(true)"
+                [disabled]="makingDecision()"
+                class="flex items-center justify-center gap-2 px-6 py-4 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+              >
+                <span class="text-2xl">✓</span>
+                <span>Play</span>
+              </button>
+              <button
+                (click)="makePlayDecision(false)"
+                [disabled]="makingDecision() || isPartyPlayer() || isDealer() || gameState()!.currentRound!.trumpSuit === 'Clubs'"
+                class="flex items-center justify-center gap-2 px-6 py-4 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+              >
+                <span class="text-2xl">✗</span>
+                <span>Sit Out</span>
+              </button>
+            </div>
+          </div>
+        }
+
+        <!-- Card Exchange -->
+        @if (gameState()!.currentRound && gameState()!.currentRound!.status === 3 && gameState()!.myHand && gameState()!.myHand!.length > 0) {
+          <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-bold mb-4">Card Exchange</h2>
+            <p class="text-gray-600 mb-6">
+              Select up to 3 cards to exchange. You cannot exchange the Ace of trump ({{ getCardSymbol(gameState()!.currentRound!.trumpSuit!) }} Ace).
+              @if (cardsToExchange().length > 0) {
+                <span class="font-semibold text-blue-600">{{ cardsToExchange().length }} card(s) selected</span>
+              }
+            </p>
+            <div class="flex justify-center gap-4 flex-wrap mb-6">
+              @for (card of gameState()!.myHand; track card.suit + card.rank) {
+                <button
+                  (click)="toggleCardForExchange(card)"
+                  [disabled]="exchangingCards() || (card.rank === 'Ace' && card.suit === gameState()!.currentRound!.trumpSuit)"
+                  [class]="'w-24 h-36 bg-white border-2 rounded-lg shadow-md p-2 flex flex-col items-center justify-center transition-all ' +
+                           (isCardSelectedForExchange(card) ? 'border-blue-500 ring-2 ring-blue-500 -translate-y-2' : 'border-gray-300 hover:border-blue-300') +
+                           (exchangingCards() || (card.rank === 'Ace' && card.suit === gameState()!.currentRound!.trumpSuit) ? ' opacity-50 cursor-not-allowed' : ' hover:-translate-y-1 cursor-pointer')"
+                >
+                  <div [class]="'text-4xl ' + getCardColor(card.suit)">
+                    {{ getCardSymbol(card.suit) }}
+                  </div>
+                  <div [class]="'text-2xl font-bold ' + getCardColor(card.suit)">
+                    {{ getRankDisplay(card.rank) }}
+                  </div>
+                </button>
+              }
+            </div>
+            <div class="flex justify-center gap-4">
+              <button
+                (click)="confirmCardExchange()"
+                [disabled]="exchangingCards()"
+                class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+              >
+                @if (exchangingCards()) {
+                  <span>Exchanging...</span>
+                } @else if (cardsToExchange().length > 0) {
+                  <span>Exchange {{ cardsToExchange().length }} Card(s)</span>
+                } @else {
+                  <span>Keep All Cards</span>
+                }
+              </button>
+            </div>
+          </div>
+        }
+
         <!-- Players Info -->
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           @for (player of gameState()!.players; track player.playerSessionId) {

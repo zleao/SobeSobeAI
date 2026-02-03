@@ -1,3 +1,55 @@
+## 2026-02-03 - Issue #4: Frontend Development - Player Decisions and Card Exchange UI Implementation
+
+### What was implemented
+- Added Player Decision UI for opt-in/opt-out phase (round status = PlayerDecisions)
+- UI shows explanation and rules for sitting out
+- Highlights if player must play (party player, dealer, Clubs trump)
+- Shows current points to help decision-making
+- Play and Sit Out buttons with appropriate disabled states
+- Added Card Exchange UI for card exchange phase (round status = CardExchange)
+- Select up to 3 cards to exchange
+- Cannot exchange Ace of trump (disabled with tooltip)
+- Visual feedback for selected cards (blue ring, translate animation)
+- "Keep All Cards" option (exchange 0 cards)
+- Loading states for both operations (makingDecision, exchangingCards signals)
+- Error handling with 3-second auto-dismiss messages
+- Added makePlayDecision() and exchangeCards() methods to Game service
+- Added isPartyPlayer(), isDealer(), getMyPoints() helper methods to GameBoard component
+- Added cardsToExchange signal to track selected cards
+- Added toggleCardForExchange(), isCardSelectedForExchange(), confirmCardExchange() methods
+- Frontend builds successfully (341.58 kB bundle)
+- All 81 backend tests pass
+
+### Files changed
+- Modified: frontend/src/app/services/game.ts (added makePlayDecision, exchangeCards methods)
+- Modified: frontend/src/app/pages/game-board/game-board.ts (added decision and exchange logic)
+- Modified: frontend/src/app/pages/game-board/game-board.html (added UI for player decisions and card exchange)
+
+### Learnings
+- Round status 2 = PlayerDecisions phase (after trump selection, before card exchange)
+- Round status 3 = CardExchange phase (after players opt-in, before playing)
+- Party player and dealer cannot sit out (enforced by disabled button)
+- Clubs trump forces all players to play (game rule)
+- Player with ≤5 points cannot sit out (backend enforces, could add UI validation)
+- Max 2 consecutive sit-outs tracked by consecutiveRoundsOut
+- Card exchange max 3 cards, cannot exchange Ace of trump
+- isCardSelectedForExchange() checks both suit and rank for equality
+- toggleCardForExchange() adds/removes card from selection array
+- Array spread operator [...cards, card] creates new array (required for signal updates)
+- Exchange 0 cards is valid - "Keep All Cards" button shows when no cards selected
+- Visual feedback important: selected cards lift up (-translate-y-2), disabled cards fade (opacity-50)
+- Error messages from backend include validation details (e.g., "Party player must play")
+
+### Next steps
+- Test complete game flow with all phases: trump selection → player decisions → card exchange → play 5 tricks
+- Add score table/history display for viewing point changes
+- Integrate gRPC for real-time event updates (replace polling)
+- Add animations for phase transitions and card plays
+- Add sound effects for actions (card play, trick win)
+- Implement game completion screen with final scores and prizes
+- Test responsive design on mobile devices
+- Consider adding drag-and-drop for card operations
+
 ## 2026-02-03 - Issue #4: Frontend Development - Game Board Component Implementation
 
 ### What was implemented

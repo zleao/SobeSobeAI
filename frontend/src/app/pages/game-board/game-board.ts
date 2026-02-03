@@ -16,6 +16,9 @@ export class GameBoard implements OnInit, OnDestroy {
   loading = signal(true);
   error = signal<string | null>(null);
   selectedCard = signal<Card | null>(null);
+  makingDecision = signal(false);
+  cardsToExchange = signal<Card[]>([]);
+  exchangingCards = signal(false);
   
   private gameId: string = '';
   private pollSubscription?: Subscription;
@@ -181,5 +184,90 @@ export class GameBoard implements OnInit, OnDestroy {
       5: 'Completed',
     };
     return statusMap[status] || 'Unknown';
+  }
+
+  makePlayDecision(willPlay: boolean) {
+    this.makingDecision.set(true);
+    this.gameService.makePlayDecision(this.gameId, willPlay).subscribe({
+      next: () => {
+        this.makingDecision.set(false);
+        this.loadGameState();
+      },
+      error: (err) => {
+        console.error('Error making play decision:', err);
+        this.error.set(err.error?.error?.message || 'Failed to make decision');
+        setTimeout(() => this.error.set(null), 3000);
+        this.makingDecision.set(false);
+      },
+    });
+  }
+
+  isPartyPlayer(): boolean {
+    const state = this.gameState();
+    const currentUser = this.authService.currentUser();
+    if (!state || !currentUser || !state.currentRound) return false;
+
+    const myPlayer = state.players.find(p => p.userId === currentUser.id);
+    if (!myPlayer) return false;
+
+    return myPlayer.position === state.currentRound.partyPlayerPosition;
+  }
+
+  isDealer(): boolean {
+    const state = this.gameState();
+    const currentUser = this.authService.currentUser();
+    if (!state || !currentUser || !state.currentRound) return false;
+
+    const myPlayer = state.players.find(p => p.userId === currentUser.id);
+    if (!myPlayer) return false;
+
+    return myPlayer.position === state.currentRound.dealerPosition;
+  }
+
+  getMyPoints(): number {
+    const state = this.gameState();
+    const currentUser = this.authService.currentUser();
+    if (!state || !currentUser) return 0;
+
+    const myPlayer = state.players.find(p => p.userId === currentUser.id);
+    return myPlayer?.currentPoints || 0;
+  }
+
+  toggleCardForExchange(card: Card) {
+    const cards = this.cardsToExchange();
+    const index = cards.findIndex(c => c.suit === card.suit && c.rank === card.rank);
+    
+    if (index >= 0) {
+      // Remove card from selection
+      this.cardsToExchange.set([...cards.slice(0, index), ...cards.slice(index + 1)]);
+    } else {
+      // Add card to selection (max 3)
+      if (cards.length < 3) {
+        this.cardsToExchange.set([...cards, card]);
+      }
+    }
+  }
+
+  isCardSelectedForExchange(card: Card): boolean {
+    return this.cardsToExchange().some(c => c.suit === card.suit && c.rank === card.rank);
+  }
+
+  confirmCardExchange() {
+    const cards = this.cardsToExchange();
+    this.exchangingCards.set(true);
+
+    this.gameService.exchangeCards(this.gameId, cards).subscribe({
+      next: () => {
+        this.exchangingCards.set(false);
+        this.cardsToExchange.set([]);
+        this.loadGameState();
+      },
+      error: (err) => {
+        console.error('Error exchanging cards:', err);
+        this.error.set(err.error?.error?.message || 'Failed to exchange cards');
+        setTimeout(() => this.error.set(null), 3000);
+        this.exchangingCards.set(false);
+      },
+    });
   }
 }

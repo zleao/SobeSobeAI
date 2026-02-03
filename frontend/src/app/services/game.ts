@@ -169,6 +169,14 @@ export class Game {
     return this.http.get<GameStateResponse>(`${this.API_URL}/games/${id}/state`);
   }
 
+  makePlayDecision(id: string, willPlay: boolean): Observable<any> {
+    return this.http.post<any>(`${this.API_URL}/games/${id}/rounds/current/play-decision`, { willPlay });
+  }
+
+  exchangeCards(id: string, cards: Card[]): Observable<any> {
+    return this.http.post<any>(`${this.API_URL}/games/${id}/rounds/current/exchange-cards`, { cardsToExchange: cards });
+  }
+
   selectTrump(id: string, request: SelectTrumpRequest): Observable<any> {
     return this.http.post<any>(`${this.API_URL}/games/${id}/rounds/current/trump`, request);
   }
