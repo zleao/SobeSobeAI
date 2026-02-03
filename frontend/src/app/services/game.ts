@@ -95,4 +95,8 @@ export class Game {
   leaveGame(id: string): Observable<any> {
     return this.http.post<any>(`${this.API_URL}/games/${id}/leave`, {});
   }
+
+  startGame(id: string): Observable<any> {
+    return this.http.post<any>(`${this.API_URL}/games/${id}/start`, {});
+  }
 }

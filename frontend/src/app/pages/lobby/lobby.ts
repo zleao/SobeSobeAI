@@ -48,8 +48,8 @@ export class Lobby implements OnInit {
     this.gameService.createGame(5).subscribe({
       next: (game) => {
         this.isLoading.set(false);
-        // Refresh the game list
-        this.loadGames();
+        // Navigate to game room after creating
+        this.router.navigate(['/game-room', game.id]);
       },
       error: (error) => {
         this.errorMessage.set('Failed to create game. Please try again.');
@@ -61,8 +61,8 @@ export class Lobby implements OnInit {
   onJoinGame(gameId: string): void {
     this.gameService.joinGame(gameId).subscribe({
       next: () => {
-        // TODO: Navigate to game room
-        this.loadGames();
+        // Navigate to game room after joining
+        this.router.navigate(['/game-room', gameId]);
       },
       error: (error) => {
         this.errorMessage.set(error.error?.message || 'Failed to join game.');

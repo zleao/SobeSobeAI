@@ -1,0 +1,164 @@
+<div class="min-h-screen bg-gray-50 p-4">
+  <div class="max-w-4xl mx-auto">
+    <!-- Loading State -->
+    @if (loading()) {
+      <div class="text-center py-12">
+        <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        <p class="mt-4 text-gray-600">Loading game details...</p>
+      </div>
+    }
+
+    <!-- Error State -->
+    @if (error() && !loading()) {
+      <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+        <p class="text-red-800">{{ error() }}</p>
+      </div>
+    }
+
+    <!-- Game Room -->
+    @if (game() && !loading()) {
+      <div class="bg-white rounded-lg shadow-lg p-6">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-900">Game Room</h1>
+            <p class="text-gray-600 mt-1">Waiting for players to join...</p>
+          </div>
+          <span [class]="'px-3 py-1 rounded-full text-sm font-medium ' + getStatusBadgeClass()">
+            {{ getStatusText() }}
+          </span>
+        </div>
+
+        <!-- Game Details -->
+        <div class="border-t border-gray-200 pt-6 mb-6">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <p class="text-sm text-gray-500">Created by</p>
+              <p class="text-lg font-medium text-gray-900">{{ game()!.createdBy.displayName }}</p>
+            </div>
+            <div>
+              <p class="text-sm text-gray-500">Max Players</p>
+              <p class="text-lg font-medium text-gray-900">{{ game()!.maxPlayers }}</p>
+            </div>
+            <div>
+              <p class="text-sm text-gray-500">Players Joined</p>
+              <p class="text-lg font-medium text-gray-900">
+                {{ game()!.players.length }} / {{ game()!.maxPlayers }}
+              </p>
+            </div>
+            <div>
+              <p class="text-sm text-gray-500">Created</p>
+              <p class="text-lg font-medium text-gray-900">
+                {{ game()!.createdAt | date:'short' }}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Players List -->
+        <div class="border-t border-gray-200 pt-6">
+          <h2 class="text-xl font-semibold text-gray-900 mb-4">Players</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            @for (player of game()!.players; track player.id) {
+              <div class="flex items-center space-x-3 p-4 bg-gray-50 rounded-lg">
+                <!-- Avatar Placeholder -->
+                <div class="flex-shrink-0">
+                  <div class="w-12 h-12 bg-indigo-600 rounded-full flex items-center justify-center text-white font-semibold">
+                    {{ player.displayName.charAt(0).toUpperCase() }}
+                  </div>
+                </div>
+                
+                <!-- Player Info -->
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-gray-900 truncate">
+                    {{ player.displayName }}
+                    @if (player.userId === game()!.createdBy.id) {
+                      <span class="ml-2 text-xs text-indigo-600 font-semibold">(Host)</span>
+                    }
+                  </p>
+                  <p class="text-sm text-gray-500">Position: {{ player.position + 1 }}</p>
+                </div>
+
+                <!-- Points Badge -->
+                <div class="flex-shrink-0">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    {{ player.currentPoints }} pts
+                  </span>
+                </div>
+              </div>
+            }
+            
+            <!-- Empty Slots -->
+            @for (slot of [].constructor(game()!.maxPlayers - game()!.players.length); track $index) {
+              <div class="flex items-center space-x-3 p-4 bg-gray-100 rounded-lg border-2 border-dashed border-gray-300">
+                <div class="flex-shrink-0">
+                  <div class="w-12 h-12 bg-gray-300 rounded-full flex items-center justify-center">
+                    <svg class="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </div>
+                </div>
+                <div class="flex-1">
+                  <p class="text-sm text-gray-500 italic">Waiting for player...</p>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="border-t border-gray-200 pt-6 mt-6">
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div class="flex">
+              <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                </svg>
+              </div>
+              <div class="ml-3">
+                @if (isCreator()) {
+                  <h3 class="text-sm font-medium text-blue-800">You are the host</h3>
+                  <div class="mt-2 text-sm text-blue-700">
+                    <p>You can start the game once at least 2 players have joined.</p>
+                  </div>
+                } @else {
+                  <h3 class="text-sm font-medium text-blue-800">Waiting for host</h3>
+                  <div class="mt-2 text-sm text-blue-700">
+                    <p>The host will start the game once all players are ready.</p>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="border-t border-gray-200 pt-6 mt-6 flex justify-between">
+          <button
+            (click)="leaveGame()"
+            [disabled]="leavingGame()"
+            class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed font-medium">
+            @if (leavingGame()) {
+              <span>Leaving...</span>
+            } @else {
+              <span>Leave Game</span>
+            }
+          </button>
+
+          @if (isCreator()) {
+            <button
+              (click)="startGame()"
+              [disabled]="game()!.players.length < 2 || startingGame()"
+              class="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed font-medium">
+              @if (startingGame()) {
+                <span>Starting...</span>
+              } @else {
+                <span>Start Game</span>
+              }
+            </button>
+          }
+        </div>
+      </div>
+    }
+  </div>
+</div>
