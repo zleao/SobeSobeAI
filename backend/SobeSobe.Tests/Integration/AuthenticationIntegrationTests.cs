@@ -13,7 +13,7 @@ namespace SobeSobe.Tests.Integration;
 /// Integration tests for authentication endpoints
 /// Validates complete authentication flow: register, login, refresh, logout
 /// </summary>
-public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactoryFixture>
+public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactoryFixture>, IAsyncLifetime
 {
     private readonly HttpClient _client;
     private readonly WebApplicationFactoryFixture _factory;
@@ -22,6 +22,21 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
     {
         _factory = factory;
         _client = factory.CreateClient();
+    }
+
+    public Task InitializeAsync()
+    {
+        // Nothing to do on initialization
+        return Task.CompletedTask;
+    }
+
+    public async Task DisposeAsync()
+    {
+        // Clear database after each test
+        using var scope = _factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        await dbContext.Database.EnsureDeletedAsync();
+        await dbContext.Database.EnsureCreatedAsync();
     }
 
     [Fact(DisplayName = "Register new user returns 201 Created with user data")]
@@ -37,7 +52,7 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
         };
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/auth/register", request);
+        var response = await _client.PostAsJsonAsync("/api/users/register", request);
 
         // Assert
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -60,7 +75,7 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
             Password = "SecurePassword123!",
             DisplayName = "Test User 1"
         };
-        await _client.PostAsJsonAsync("/api/auth/register", firstRequest);
+        await _client.PostAsJsonAsync("/api/users/register", firstRequest);
 
         // Act - Try to register with same username
         var secondRequest = new RegisterUserRequest
@@ -70,7 +85,7 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
             Password = "SecurePassword123!",
             DisplayName = "Test User 2"
         };
-        var response = await _client.PostAsJsonAsync("/api/auth/register", secondRequest);
+        var response = await _client.PostAsJsonAsync("/api/users/register", secondRequest);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -89,7 +104,7 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
             Password = "SecurePassword123!",
             DisplayName = "Test User 1"
         };
-        await _client.PostAsJsonAsync("/api/auth/register", firstRequest);
+        await _client.PostAsJsonAsync("/api/users/register", firstRequest);
 
         // Act - Try to register with same email
         var secondRequest = new RegisterUserRequest
@@ -99,7 +114,7 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
             Password = "SecurePassword123!",
             DisplayName = "Test User 2"
         };
-        var response = await _client.PostAsJsonAsync("/api/auth/register", secondRequest);
+        var response = await _client.PostAsJsonAsync("/api/users/register", secondRequest);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -118,7 +133,7 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
             Password = "SecurePassword123!",
             DisplayName = "Test User"
         };
-        await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
+        await _client.PostAsJsonAsync("/api/users/register", registerRequest);
 
         // Act - Login with username
         var loginRequest = new LoginRequest
@@ -151,7 +166,7 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
             Password = "SecurePassword123!",
             DisplayName = "Test User"
         };
-        await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
+        await _client.PostAsJsonAsync("/api/users/register", registerRequest);
 
         // Act - Login with email
         var loginRequest = new LoginRequest
@@ -169,8 +184,8 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
         Assert.NotNull(loginResponse.RefreshToken);
     }
 
-    [Fact(DisplayName = "Login with invalid credentials returns 400 Bad Request")]
-    public async Task Login_InvalidCredentials_ReturnsBadRequest()
+    [Fact(DisplayName = "Login with invalid credentials returns 401 Unauthorized")]
+    public async Task Login_InvalidCredentials_ReturnsUnauthorized()
     {
         // Arrange - Register user
         var registerRequest = new RegisterUserRequest
@@ -180,7 +195,7 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
             Password = "SecurePassword123!",
             DisplayName = "Test User"
         };
-        await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
+        await _client.PostAsJsonAsync("/api/users/register", registerRequest);
 
         // Act - Login with wrong password
         var loginRequest = new LoginRequest
@@ -191,9 +206,8 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
         var response = await _client.PostAsJsonAsync("/api/auth/login", loginRequest);
 
         // Assert
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var content = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Invalid credentials", content);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        // Note: Results.Unauthorized() returns no body by default
     }
 
     [Fact(DisplayName = "Refresh token returns new access and refresh tokens")]
@@ -207,7 +221,7 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
             Password = "SecurePassword123!",
             DisplayName = "Test User"
         };
-        await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
+        await _client.PostAsJsonAsync("/api/users/register", registerRequest);
 
         var loginRequest = new LoginRequest
         {
@@ -235,8 +249,8 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
         Assert.NotEqual(loginData.RefreshToken, refreshResponse.RefreshToken);
     }
 
-    [Fact(DisplayName = "Refresh with invalid token returns 400 Bad Request")]
-    public async Task RefreshToken_InvalidToken_ReturnsBadRequest()
+    [Fact(DisplayName = "Refresh with invalid token returns 401 Unauthorized")]
+    public async Task RefreshToken_InvalidToken_ReturnsUnauthorized()
     {
         // Act - Try to refresh with invalid token
         var refreshRequest = new RefreshTokenRequest
@@ -246,9 +260,8 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
         var response = await _client.PostAsJsonAsync("/api/auth/refresh", refreshRequest);
 
         // Assert
-        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        var content = await response.Content.ReadAsStringAsync();
-        Assert.Contains("Invalid refresh token", content);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        // Note: Results.Unauthorized() returns no body by default
     }
 
     [Fact(DisplayName = "Logout revokes refresh token")]
@@ -262,7 +275,7 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
             Password = "SecurePassword123!",
             DisplayName = "Test User"
         };
-        await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
+        await _client.PostAsJsonAsync("/api/users/register", registerRequest);
 
         var loginRequest = new LoginRequest
         {
@@ -289,7 +302,7 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
             RefreshToken = loginData.RefreshToken
         };
         var refreshResponse = await _client.PostAsJsonAsync("/api/auth/refresh", refreshRequest);
-        Assert.Equal(HttpStatusCode.BadRequest, refreshResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, refreshResponse.StatusCode);
     }
 
     [Fact(DisplayName = "Get current user without authentication returns 401 Unauthorized")]
@@ -313,7 +326,7 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
             Password = "SecurePassword123!",
             DisplayName = "Test User"
         };
-        await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
+        await _client.PostAsJsonAsync("/api/users/register", registerRequest);
 
         var loginRequest = new LoginRequest
         {
@@ -348,7 +361,7 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
             Password = "SecurePassword123!",
             DisplayName = "Test User"
         };
-        var registerResponse = await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
+        var registerResponse = await _client.PostAsJsonAsync("/api/users/register", registerRequest);
         Assert.Equal(HttpStatusCode.Created, registerResponse.StatusCode);
 
         // Step 2: Login
@@ -391,6 +404,7 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
         {
             RefreshToken = refreshData.RefreshToken
         });
-        Assert.Equal(HttpStatusCode.BadRequest, revokedRefreshResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, revokedRefreshResponse.StatusCode);
     }
 }
+

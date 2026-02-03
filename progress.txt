@@ -1,3 +1,38 @@
+## 2026-02-03 - Issue #7: Testing - Fixed Integration Test Database Lifecycle Issues
+
+### What was implemented
+- Fixed in-memory database lifecycle issues that caused 11 of 12 authentication integration tests to fail
+- Replaced EF Core InMemory provider with shared in-memory SQLite connection to persist database state across HTTP requests
+- Implemented IAsyncLifetime in test class to reset database between tests for proper test isolation
+- Fixed test endpoint URLs: changed /api/auth/register to /api/users/register (actual endpoint path)
+- Corrected HTTP status code expectations: changed BadRequest (400) to Unauthorized (401) for authentication failures
+- Removed assertions checking error message content from Unauthorized responses (no body returned by Results.Unauthorized())
+- All 81 tests now passing: 69 unit tests + 12 integration tests
+
+### Files changed
+- Modified: backend/SobeSobe.Tests/Integration/WebApplicationFactoryFixture.cs (replaced InMemory provider with shared SQLite connection)
+- Modified: backend/SobeSobe.Tests/Integration/AuthenticationIntegrationTests.cs (added IAsyncLifetime, fixed URLs and status codes)
+
+### Learnings
+- EF Core InMemory provider doesn't persist data between HTTP requests in WebApplicationFactory tests
+- Shared in-memory SQLite connection (DataSource=:memory:) with connection.Open() keeps database alive across requests
+- SqliteConnection must be kept open and disposed when factory is disposed to maintain database
+- IAsyncLifetime.DisposeAsync() allows database cleanup after each test for proper test isolation
+- EnsureDeleted() + EnsureCreated() resets database schema and data between tests
+- Authentication endpoint paths: /api/users/register (not /api/auth/register), /api/auth/login, /api/auth/refresh, /api/auth/logout, /api/auth/user
+- HTTP status codes: 401 Unauthorized for invalid credentials/tokens (not 400 Bad Request)
+- Results.Unauthorized() returns empty response body by default - don't assert on error message content
+- DbContextOptions descriptor must be removed before adding replacement DbContext configuration
+- Test isolation critical: shared database causes test failures when tests expect unique usernames
+- All tests must be independent and repeatable - database state reset ensures clean slate for each test
+
+### Next steps
+- Add integration tests for game management endpoints (create, join, leave, start)
+- Add integration tests for game action endpoints (trump selection, play decision, card exchange, play card)
+- Add integration tests for game state and score history endpoints
+- Measure code coverage percentage and target 80%+ for critical paths
+- Consider adding integration tests for gRPC event subscriptions
+- Document integration testing patterns and database management approach for team
 ## 2026-02-03 - Issue #6: Real-time Communication - gRPC Event Broadcasting Integration
 
 ### What was implemented
