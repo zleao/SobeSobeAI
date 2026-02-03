@@ -1457,3 +1457,69 @@
 - Measure code coverage and target 80%+ for critical paths
 - Document integration testing patterns for team
 
+## 2026-02-03 - Issue #4: Frontend Development - Authentication Tracer Bullet
+
+### What was implemented
+- Implemented complete authentication tracer bullet for Angular frontend
+- Created Auth service with signal-based state management
+  - Register, login, logout, refresh token methods
+  - JWT token storage in localStorage
+  - currentUser signal with computed isAuthenticated flag
+  - Automatic token management with refresh capability
+- Created authInterceptor to automatically add Authorization header to API requests
+- Created Login component with reactive forms
+  - Username/email and password validation
+  - Loading state and error handling
+  - Routing to lobby after successful login
+- Created Register component with reactive forms
+  - Username (3-20 alphanumeric), email, displayName, password (8+ chars) validation
+  - Success message and redirect to login after registration
+- Created Lobby component with user info display and logout
+- Implemented route guards (authGuard, guestGuard) to protect routes
+- Configured routing: / → /login, /register, /lobby (protected)
+- Integrated HttpClient with auth interceptor in app.config
+- Styled components with Tailwind CSS utility classes
+- All components use Angular 19 signals and standalone components
+- Frontend builds successfully (279.20 kB bundle)
+
+### Files changed
+- Created: frontend/src/app/services/auth.ts (authentication service with signals)
+- Created: frontend/src/app/interceptors/auth-interceptor.ts (JWT interceptor)
+- Created: frontend/src/app/pages/login/login.ts (login component)
+- Created: frontend/src/app/pages/login/login.html (login template)
+- Created: frontend/src/app/pages/register/register.ts (register component)
+- Created: frontend/src/app/pages/register/register.html (register template)
+- Created: frontend/src/app/pages/lobby/lobby.ts (lobby placeholder component)
+- Created: frontend/src/app/pages/lobby/lobby.html (lobby template)
+- Modified: frontend/src/app/app.config.ts (added HttpClient and auth interceptor)
+- Modified: frontend/src/app/app.routes.ts (configured routes with guards)
+- Modified: frontend/src/app/app.html (cleaned up placeholder template)
+
+### Learnings
+- Angular 19 signals provide reactive state management without RxJS Subject boilerplate
+- signal() creates writable signal, computed() creates derived signal
+- Functional route guards (authGuard, guestGuard) replace deprecated class-based guards
+- inject() function allows dependency injection in standalone functions
+- HttpInterceptorFn functional interceptor replaces class-based HttpInterceptor
+- provideHttpClient with withInterceptors() configures interceptors
+- Tailwind CSS utilities enable rapid UI development without custom CSS
+- ReactiveFormsModule required for FormBuilder and FormGroup
+- RouterLink directive enables declarative routing in templates
+- FormGroup.invalid checks all form control validators
+- LocalStorage provides client-side token persistence across sessions
+- Auth service uses readonly() to expose signal without allowing external writes
+- Guest guard redirects authenticated users away from login/register
+- Auth guard redirects unauthenticated users to login
+
+### Next steps
+- Test end-to-end authentication flow (register → login → lobby → logout)
+- Implement game lobby list component (fetch games from /api/games)
+- Implement create game dialog component
+- Implement join game functionality
+- Implement game room (waiting area) component
+- Connect to gRPC for real-time events
+- Add error handling for network failures and token expiration
+- Implement token refresh logic when access token expires (401 response)
+- Add loading states for all async operations
+- Test responsive design on mobile devices
+

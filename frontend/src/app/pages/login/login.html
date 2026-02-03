@@ -1,0 +1,63 @@
+<div class="min-h-screen flex items-center justify-center bg-gray-100">
+  <div class="max-w-md w-full bg-white rounded-lg shadow-md p-8">
+    <h2 class="text-3xl font-bold text-center mb-6 text-gray-800">Sobe Sobe</h2>
+    <h3 class="text-xl text-center mb-6 text-gray-600">Login</h3>
+
+    @if (errorMessage()) {
+      <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        {{ errorMessage() }}
+      </div>
+    }
+
+    <form [formGroup]="loginForm" (ngSubmit)="onSubmit()">
+      <div class="mb-4">
+        <label for="usernameOrEmail" class="block text-gray-700 font-medium mb-2">
+          Username or Email
+        </label>
+        <input
+          type="text"
+          id="usernameOrEmail"
+          formControlName="usernameOrEmail"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          [class.border-red-500]="loginForm.get('usernameOrEmail')?.invalid && loginForm.get('usernameOrEmail')?.touched"
+        />
+        @if (loginForm.get('usernameOrEmail')?.invalid && loginForm.get('usernameOrEmail')?.touched) {
+          <p class="text-red-500 text-sm mt-1">Username or email is required</p>
+        }
+      </div>
+
+      <div class="mb-6">
+        <label for="password" class="block text-gray-700 font-medium mb-2">
+          Password
+        </label>
+        <input
+          type="password"
+          id="password"
+          formControlName="password"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          [class.border-red-500]="loginForm.get('password')?.invalid && loginForm.get('password')?.touched"
+        />
+        @if (loginForm.get('password')?.invalid && loginForm.get('password')?.touched) {
+          <p class="text-red-500 text-sm mt-1">Password must be at least 8 characters</p>
+        }
+      </div>
+
+      <button
+        type="submit"
+        [disabled]="loginForm.invalid || isLoading()"
+        class="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+      >
+        @if (isLoading()) {
+          <span>Logging in...</span>
+        } @else {
+          <span>Login</span>
+        }
+      </button>
+    </form>
+
+    <p class="text-center mt-4 text-gray-600">
+      Don't have an account? 
+      <a routerLink="/register" class="text-blue-600 hover:underline">Register</a>
+    </p>
+  </div>
+</div>
