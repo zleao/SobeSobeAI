@@ -74,3 +74,7 @@ prompt.md
 /backend/.vs
 
 TestResults/
+/backend/SobeSobe.Api/sobesobe.db
+/backend/SobeSobe.Api/sobesobe.db-shm
+/backend/SobeSobe.Api/sobesobe.db-wal
+/coralph.config.json.bak
