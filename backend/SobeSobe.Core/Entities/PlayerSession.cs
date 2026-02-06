@@ -25,6 +25,8 @@ public class PlayerSession
     [Range(0, 2)]
     public int ConsecutiveRoundsOut { get; set; } = 0;
 
+    public int? LastDecisionRoundNumber { get; set; }
+
     public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime? LeftAt { get; set; }

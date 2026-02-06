@@ -36,7 +36,7 @@ public class AuthenticationIntegrationTests : IClassFixture<WebApplicationFactor
         using var scope = _factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         await dbContext.Database.EnsureDeletedAsync();
-        await dbContext.Database.EnsureCreatedAsync();
+        await dbContext.Database.MigrateAsync();
     }
 
     [Fact(DisplayName = "Register new user returns 201 Created with user data")]

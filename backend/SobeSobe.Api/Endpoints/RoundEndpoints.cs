@@ -223,6 +223,8 @@ public static class RoundEndpoints
                 playerSession.ConsecutiveRoundsOut = 0;
             }
 
+            playerSession.LastDecisionRoundNumber = currentRound.RoundNumber;
+
             // Create or update Hand to track who's playing
             var existingHand = await db.Hands
                 .FirstOrDefaultAsync(h => h.RoundId == currentRound.Id && h.PlayerSessionId == playerSession.Id);
@@ -261,6 +263,66 @@ public static class RoundEndpoints
                 WillPlay = request.WillPlay,
                 ConsecutiveRoundsOut = playerSession.ConsecutiveRoundsOut
             };
+
+            var allDecisionsMade = game.PlayerSessions
+                .Where(ps => ps.IsActive)
+                .All(ps => ps.LastDecisionRoundNumber == currentRound.RoundNumber);
+
+            if (!allDecisionsMade)
+            {
+                return Results.Ok(response);
+            }
+
+            await db.Entry(currentRound).ReloadAsync();
+            if (currentRound.Status != RoundStatus.PlayerDecisions)
+            {
+                return Results.Ok(response);
+            }
+
+            var hands = await db.Hands
+                .Where(h => h.RoundId == currentRound.Id)
+                .Include(h => h.PlayerSession)
+                .ToListAsync();
+
+            if (hands.Count == 0)
+            {
+                return Results.Ok(response);
+            }
+
+            var handsAlreadyDealt = hands.Any(h => h.Cards.Count > 0);
+            if (!handsAlreadyDealt)
+            {
+                var deck = CardDealingService.CreateDeck();
+                CardDealingService.ShuffleDeck(deck);
+
+                var dealerPosition = game.CurrentDealerPosition ?? 0;
+                var playingPlayerPositions = hands
+                    .Where(h => h.PlayerSession != null)
+                    .Select(h => h.PlayerSession!.Position)
+                    .ToList();
+                var dealtCards = CardDealingService.DealCards(deck, playingPlayerPositions, dealerPosition, 3);
+
+                foreach (var hand in hands)
+                {
+                    if (hand.PlayerSession == null)
+                    {
+                        continue;
+                    }
+
+                    var currentCards = hand.Cards;
+                    var newCards = dealtCards[hand.PlayerSession.Position];
+                    currentCards.AddRange(newCards);
+                    hand.CardsJson = JsonSerializer.Serialize(currentCards);
+
+                    if (string.IsNullOrEmpty(hand.InitialCardsJson) || hand.InitialCardsJson == "[]")
+                    {
+                        hand.InitialCardsJson = hand.CardsJson;
+                    }
+                }
+            }
+
+            currentRound.Status = RoundStatus.CardExchange;
+            await db.SaveChangesAsync();
 
             return Results.Ok(response);
         })
@@ -370,8 +432,8 @@ public static class RoundEndpoints
                 // Check if all active players have made their decisions
                 var activePlayers = game.PlayerSessions.Where(ps => ps.IsActive).ToList();
 
-                // For now, allow dealing if at least dealer and party player have hands
-                if (hands.Count < 2)
+                var allDecisionsMade = activePlayers.All(ps => ps.LastDecisionRoundNumber == currentRound.RoundNumber);
+                if (!allDecisionsMade)
                 {
                     return Results.BadRequest(new { error = "Not all players have made their decisions yet" });
                 }

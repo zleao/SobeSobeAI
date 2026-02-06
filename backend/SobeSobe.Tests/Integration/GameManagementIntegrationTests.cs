@@ -1,7 +1,10 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using SobeSobe.Api.DTOs;
 using SobeSobe.Core.Enums;
@@ -13,6 +16,11 @@ namespace SobeSobe.Tests.Integration;
 [Collection("Integration Tests")]
 public class GameManagementIntegrationTests : IAsyncLifetime
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter() }
+    };
+
     private readonly WebApplicationFactory<Program> _factory;
     private readonly HttpClient _client;
     private string? _accessToken1;
@@ -34,7 +42,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         var scope = _factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         await dbContext.Database.EnsureDeletedAsync();
-        await dbContext.Database.EnsureCreatedAsync();
+        await dbContext.Database.MigrateAsync();
 
         // Create three test users for multiplayer scenarios
         var registerResponse1 = await _client.PostAsJsonAsync("/api/users/register", new RegisterUserRequest
@@ -44,7 +52,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
             Password = "password123",
             DisplayName = "Player One"
         });
-        var user1 = await registerResponse1.Content.ReadFromJsonAsync<UserResponse>();
+        var user1 = await registerResponse1.Content.ReadFromJsonAsync<UserResponse>(JsonOptions);
         _userId1 = user1!.Id;
 
         var loginResponse1 = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
@@ -52,7 +60,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
             UsernameOrEmail = "player1",
             Password = "password123"
         });
-        var login1 = await loginResponse1.Content.ReadFromJsonAsync<LoginResponse>();
+        var login1 = await loginResponse1.Content.ReadFromJsonAsync<LoginResponse>(JsonOptions);
         _accessToken1 = login1!.AccessToken;
 
         var registerResponse2 = await _client.PostAsJsonAsync("/api/users/register", new RegisterUserRequest
@@ -62,7 +70,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
             Password = "password123",
             DisplayName = "Player Two"
         });
-        var user2 = await registerResponse2.Content.ReadFromJsonAsync<UserResponse>();
+        var user2 = await registerResponse2.Content.ReadFromJsonAsync<UserResponse>(JsonOptions);
         _userId2 = user2!.Id;
 
         var loginResponse2 = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
@@ -70,7 +78,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
             UsernameOrEmail = "player2",
             Password = "password123"
         });
-        var login2 = await loginResponse2.Content.ReadFromJsonAsync<LoginResponse>();
+        var login2 = await loginResponse2.Content.ReadFromJsonAsync<LoginResponse>(JsonOptions);
         _accessToken2 = login2!.AccessToken;
 
         var registerResponse3 = await _client.PostAsJsonAsync("/api/users/register", new RegisterUserRequest
@@ -80,7 +88,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
             Password = "password123",
             DisplayName = "Player Three"
         });
-        var user3 = await registerResponse3.Content.ReadFromJsonAsync<UserResponse>();
+        var user3 = await registerResponse3.Content.ReadFromJsonAsync<UserResponse>(JsonOptions);
         _userId3 = user3!.Id;
 
         var loginResponse3 = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest
@@ -88,7 +96,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
             UsernameOrEmail = "player3",
             Password = "password123"
         });
-        var login3 = await loginResponse3.Content.ReadFromJsonAsync<LoginResponse>();
+        var login3 = await loginResponse3.Content.ReadFromJsonAsync<LoginResponse>(JsonOptions);
         _accessToken3 = login3!.AccessToken;
     }
 
@@ -109,7 +117,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
 
         // Verify
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var game = await response.Content.ReadFromJsonAsync<GameResponse>();
+        var game = await response.Content.ReadFromJsonAsync<GameResponse>(JsonOptions);
         Assert.NotNull(game);
         Assert.Equal(5, game.MaxPlayers);
         Assert.Equal(SobeSobe.Core.Enums.GameStatus.Waiting, game.Status);
@@ -152,7 +160,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
 
         // Verify
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var listResponse = await response.Content.ReadFromJsonAsync<ListGamesResponse>();
+        var listResponse = await response.Content.ReadFromJsonAsync<ListGamesResponse>(JsonOptions);
         Assert.NotNull(listResponse);
         Assert.Equal(2, listResponse.Pagination.TotalItems);
         Assert.Equal(1, listResponse.Pagination.TotalPages);
@@ -169,14 +177,14 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         };
         createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
         var createResponse = await _client.SendAsync(createRequest);
-        var createdGame = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+        var createdGame = await createResponse.Content.ReadFromJsonAsync<GameResponse>(JsonOptions);
 
         // Execute
         var response = await _client.GetAsync($"/api/games/{createdGame!.Id}");
 
         // Verify
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var game = await response.Content.ReadFromJsonAsync<GameResponse>();
+        var game = await response.Content.ReadFromJsonAsync<GameResponse>(JsonOptions);
         Assert.NotNull(game);
         Assert.Equal(createdGame.Id, game.Id);
         Assert.Equal(_userId1, game.CreatedBy);
@@ -203,7 +211,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         };
         createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
         var createResponse = await _client.SendAsync(createRequest);
-        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>(JsonOptions);
 
         // Execute - player 2 joins
         var joinRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game!.Id}/join");
@@ -212,14 +220,14 @@ public class GameManagementIntegrationTests : IAsyncLifetime
 
         // Verify
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var joinResponse = await response.Content.ReadFromJsonAsync<JoinGameResponse>();
+        var joinResponse = await response.Content.ReadFromJsonAsync<JoinGameResponse>(JsonOptions);
         Assert.NotNull(joinResponse);
         Assert.Equal(_userId2, joinResponse.PlayerSession.UserId);
         Assert.Equal(1, joinResponse.PlayerSession.Position); // Second player gets position 1
         Assert.Equal(20, joinResponse.PlayerSession.CurrentPoints);
 
         // Verify game now has 2 players
-        var gameDetails = await _client.GetFromJsonAsync<GameResponse>($"/api/games/{game.Id}");
+        var gameDetails = await _client.GetFromJsonAsync<GameResponse>($"/api/games/{game.Id}", JsonOptions);
         Assert.Equal(2, gameDetails!.Players.Count);
     }
 
@@ -243,7 +251,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         };
         createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
         var createResponse = await _client.SendAsync(createRequest);
-        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>(JsonOptions);
 
         var joinRequest1 = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game!.Id}/join");
         joinRequest1.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken2);
@@ -268,7 +276,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         };
         createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
         var createResponse = await _client.SendAsync(createRequest);
-        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>(JsonOptions);
 
         // Player 2 joins (game now full)
         var joinRequest1 = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game!.Id}/join");
@@ -294,7 +302,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         };
         createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
         var createResponse = await _client.SendAsync(createRequest);
-        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>(JsonOptions);
 
         var joinRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game!.Id}/join");
         joinRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken2);
@@ -309,7 +317,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         // Verify game now has only 1 player
-        var gameDetails = await _client.GetFromJsonAsync<GameResponse>($"/api/games/{game.Id}");
+        var gameDetails = await _client.GetFromJsonAsync<GameResponse>($"/api/games/{game.Id}", JsonOptions);
         Assert.Single(gameDetails!.Players);
         Assert.Equal(_userId1, gameDetails.Players[0].UserId);
     }
@@ -324,7 +332,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         };
         createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
         var createResponse = await _client.SendAsync(createRequest);
-        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>(JsonOptions);
 
         var joinRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game!.Id}/join");
         joinRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken2);
@@ -353,7 +361,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         };
         createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
         var createResponse = await _client.SendAsync(createRequest);
-        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>(JsonOptions);
 
         // Execute - last player leaves
         var leaveRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game!.Id}/leave");
@@ -378,7 +386,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         };
         createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
         var createResponse = await _client.SendAsync(createRequest);
-        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>(JsonOptions);
 
         var joinRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game!.Id}/join");
         joinRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken2);
@@ -407,7 +415,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         };
         createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
         var createResponse = await _client.SendAsync(createRequest);
-        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>(JsonOptions);
 
         // Execute - creator cancels
         var cancelRequest = new HttpRequestMessage(HttpMethod.Delete, $"/api/games/{game!.Id}");
@@ -432,7 +440,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         };
         createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
         var createResponse = await _client.SendAsync(createRequest);
-        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>(JsonOptions);
 
         var joinRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game!.Id}/join");
         joinRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken2);
@@ -457,7 +465,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         };
         createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
         var createResponse = await _client.SendAsync(createRequest);
-        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>(JsonOptions);
 
         var joinRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game!.Id}/join");
         joinRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken2);
@@ -475,7 +483,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         // Verify
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var gameDetails = await _client.GetFromJsonAsync<GameResponse>($"/api/games/{game.Id}");
+        var gameDetails = await _client.GetFromJsonAsync<GameResponse>($"/api/games/{game.Id}", JsonOptions);
         Assert.Equal((int)GameStatus.Abandoned, (int)gameDetails!.Status);
         Assert.NotNull(gameDetails.CompletedAt);
     }
@@ -490,7 +498,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         };
         createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
         var createResponse = await _client.SendAsync(createRequest);
-        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>(JsonOptions);
 
         var joinRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game!.Id}/join");
         joinRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken2);
@@ -515,7 +523,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         };
         createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
         var createResponse = await _client.SendAsync(createRequest);
-        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>(JsonOptions);
 
         var joinRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game!.Id}/join");
         joinRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken2);
@@ -528,7 +536,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
 
         // Verify
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var startResponse = await response.Content.ReadFromJsonAsync<StartGameResponse>();
+        var startResponse = await response.Content.ReadFromJsonAsync<StartGameResponse>(JsonOptions);
         Assert.NotNull(startResponse);
         Assert.Equal("InProgress", startResponse.Status);
         Assert.Equal(1, startResponse.CurrentRoundNumber);
@@ -544,7 +552,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         };
         createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
         var createResponse = await _client.SendAsync(createRequest);
-        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>(JsonOptions);
 
         // Execute - try to start with only 1 player
         var startRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game!.Id}/start");
@@ -565,7 +573,7 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         };
         createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
         var createResponse = await _client.SendAsync(createRequest);
-        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>(JsonOptions);
 
         var joinRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game!.Id}/join");
         joinRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken2);

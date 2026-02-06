@@ -51,7 +51,7 @@ public class WebApplicationFactoryFixture : WebApplicationFactory<Program>
             var serviceProvider = services.BuildServiceProvider();
             using var scope = serviceProvider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            dbContext.Database.EnsureCreated();
+            dbContext.Database.Migrate();
         });
     }
 
