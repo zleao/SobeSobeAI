@@ -72,11 +72,10 @@ coralph.config.json
 GITHUB_ISSUES_CREATION_GUIDE.md
 prompt.md
 /backend/.vs
+*.bak
 
 TestResults/
 
 backend/SobeSobe.Api/sobesobe.db
-
 backend/SobeSobe.Api/sobesobe.db-shm
-
 backend/SobeSobe.Api/sobesobe.db-wal
