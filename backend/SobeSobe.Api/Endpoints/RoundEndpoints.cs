@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SobeSobe.Api.DTOs;
-using SobeSobe.Api.Extensions;
 using SobeSobe.Api.Services;
+using SobeSobe.Api.Services.Realtime;
 using SobeSobe.Core.Entities;
 using SobeSobe.Core.Enums;
 using SobeSobe.Core.ValueObjects;
@@ -15,7 +15,8 @@ public static class RoundEndpoints
     public static IEndpointRouteBuilder MapRoundEndpoints(this IEndpointRouteBuilder app)
     {
         // Select Trump endpoint (requires authentication, party player only)
-        app.MapPost("/api/games/{id:guid}/rounds/current/trump", async (Guid id, SelectTrumpRequest request, HttpContext httpContext, ApplicationDbContext db) =>
+        app.MapPost("/api/games/{id:guid}/rounds/current/trump", async (Guid id, SelectTrumpRequest request,
+            HttpContext httpContext, ApplicationDbContext db, IGameEventBroadcaster gameEvents) =>
         {
             // Get user ID from JWT claims
             var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
@@ -30,6 +31,11 @@ public static class RoundEndpoints
             if (game == null)
             {
                 return Results.NotFound(new { error = "Game not found" });
+            }
+
+            if (game.Status != GameStatus.InProgress)
+            {
+                return Results.BadRequest(new { error = "Game is not in progress" });
             }
 
             // Get current round
@@ -107,7 +113,7 @@ public static class RoundEndpoints
             await db.SaveChangesAsync();
 
             // Broadcast trump selected event
-            await GameEventExtensions.BroadcastTrumpSelectedAsync(
+            await gameEvents.BroadcastTrumpSelectedAsync(
                 game.Id.ToString(),
                 request.TrumpSuit.ToString(),
                 request.SelectedBeforeDealing,
@@ -145,6 +151,11 @@ public static class RoundEndpoints
             if (game == null)
             {
                 return Results.NotFound(new { error = "Game not found" });
+            }
+
+            if (game.Status != GameStatus.InProgress)
+            {
+                return Results.BadRequest(new { error = "Game is not in progress" });
             }
 
             // Get current round
@@ -274,6 +285,11 @@ public static class RoundEndpoints
             if (game == null)
             {
                 return Results.NotFound(new { error = "Game not found" });
+            }
+
+            if (game.Status != GameStatus.InProgress)
+            {
+                return Results.BadRequest(new { error = "Game is not in progress" });
             }
 
             // Get current round
@@ -443,6 +459,11 @@ public static class RoundEndpoints
                 return Results.NotFound(new { error = "Game not found" });
             }
 
+            if (game.Status != GameStatus.InProgress)
+            {
+                return Results.BadRequest(new { error = "Game is not in progress" });
+            }
+
             // Get current round with hands
             var currentRound = await db.Rounds
                 .Include(r => r.Hands)
@@ -558,7 +579,8 @@ public static class RoundEndpoints
 
         // Play Card endpoint (requires authentication)
         app.MapPost("/api/games/{id:guid}/rounds/current/play-card", async (Guid id, PlayCardRequest request,
-            HttpContext httpContext, ApplicationDbContext db, TrickTakingService trickService) =>
+            HttpContext httpContext, ApplicationDbContext db, TrickTakingService trickService,
+            IGameEventBroadcaster gameEvents) =>
         {
             // Get user ID from JWT claims
             var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
@@ -582,6 +604,11 @@ public static class RoundEndpoints
             if (game == null)
             {
                 return Results.NotFound(new { error = "Game not found" });
+            }
+
+            if (game.Status != GameStatus.InProgress)
+            {
+                return Results.BadRequest(new { error = "Game is not in progress" });
             }
 
             // Get current round
@@ -703,7 +730,7 @@ public static class RoundEndpoints
                 await db.SaveChangesAsync();
 
                 // Broadcast card played event
-                await GameEventExtensions.BroadcastCardPlayedAsync(
+                await gameEvents.BroadcastCardPlayedAsync(
                     game.Id.ToString(),
                     playerSession.Position,
                     request.Card.Rank,
@@ -744,7 +771,7 @@ public static class RoundEndpoints
                 await db.SaveChangesAsync();
 
                 // Broadcast card played event
-                await GameEventExtensions.BroadcastCardPlayedAsync(
+                await gameEvents.BroadcastCardPlayedAsync(
                     game.Id.ToString(),
                     playerSession.Position,
                     request.Card.Rank,
@@ -752,7 +779,7 @@ public static class RoundEndpoints
                     currentTrickNumber);
 
                 // Broadcast trick completed event
-                await GameEventExtensions.BroadcastTrickCompletedAsync(
+                await gameEvents.BroadcastTrickCompletedAsync(
                     game.Id.ToString(),
                     currentTrickNumber,
                     winnerSession.Position,
@@ -834,7 +861,7 @@ public static class RoundEndpoints
             await db.SaveChangesAsync();
 
             // Broadcast card played event
-            await GameEventExtensions.BroadcastCardPlayedAsync(
+            await gameEvents.BroadcastCardPlayedAsync(
                 game.Id.ToString(),
                 playerSession.Position,
                 request.Card.Rank,
@@ -842,7 +869,7 @@ public static class RoundEndpoints
                 currentTrickNumber);
 
             // Broadcast trick completed event
-            await GameEventExtensions.BroadcastTrickCompletedAsync(
+            await gameEvents.BroadcastTrickCompletedAsync(
                 game.Id.ToString(),
                 currentTrickNumber,
                 winnerSession.Position,
@@ -853,7 +880,7 @@ public static class RoundEndpoints
                 }).ToList());
 
             // Broadcast round completed event
-            await GameEventExtensions.BroadcastRoundCompletedAsync(
+            await gameEvents.BroadcastRoundCompletedAsync(
                 game.Id.ToString(),
                 currentRound.Id.ToString(),
                 currentRound.RoundNumber,
@@ -873,7 +900,7 @@ public static class RoundEndpoints
                     .OrderBy(ps => ps.CurrentPoints)
                     .First();
 
-                await GameEventExtensions.BroadcastGameCompletedAsync(
+                await gameEvents.BroadcastGameCompletedAsync(
                     game.Id.ToString(),
                     winner.Position,
                     winner.UserId.ToString(),

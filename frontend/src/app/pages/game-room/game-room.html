@@ -22,11 +22,15 @@
         <div class="flex items-center justify-between mb-6">
           <div>
             <h1 class="text-3xl font-bold text-gray-900">Game Room</h1>
-            <p class="text-gray-600 mt-1">Waiting for players to join...</p>
+            <p class="text-gray-600 mt-1">{{ getStatusSubtitle() }}</p>
+            <span [class]="'inline-flex px-3 py-1 mt-3 rounded-full text-sm font-medium ' + getStatusBadgeClass()">
+              {{ getStatusText() }}
+            </span>
           </div>
-          <span [class]="'px-3 py-1 rounded-full text-sm font-medium ' + getStatusBadgeClass()">
-            {{ getStatusText() }}
-          </span>
+          <div class="text-right">
+            <p class="text-xs uppercase tracking-wide text-gray-500">Logged in as</p>
+            <p class="text-sm font-semibold text-gray-900">{{ getCurrentUserName() }}</p>
+          </div>
         </div>
 
         <!-- Game Details -->

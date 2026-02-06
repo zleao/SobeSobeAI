@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SobeSobe.Api.DTOs;
-using SobeSobe.Api.Extensions;
+using SobeSobe.Api.Services.Realtime;
 using SobeSobe.Core.Entities;
 using SobeSobe.Core.Enums;
 using SobeSobe.Infrastructure.Data;
@@ -15,6 +15,7 @@ public static class GameEndpoints
         app.MapGet("/api/games", async (
             ApplicationDbContext db,
             int? status,
+            bool? availableOnly,
             Guid? createdBy,
             int page = 1,
             int pageSize = 20) =>
@@ -34,6 +35,10 @@ public static class GameEndpoints
             if (status.HasValue)
             {
                 query = query.Where(g => (int)g.Status == status.Value);
+            }
+            else if (availableOnly == true)
+            {
+                query = query.Where(g => g.Status != GameStatus.Abandoned && g.Status != GameStatus.Completed);
             }
 
             if (createdBy.HasValue)
@@ -148,7 +153,8 @@ public static class GameEndpoints
         .WithName("GetGameDetails");
 
         // Create Game endpoint (requires authentication)
-        app.MapPost("/api/games", async (CreateGameRequest request, HttpContext httpContext, ApplicationDbContext db) =>
+        app.MapPost("/api/games", async (CreateGameRequest request, HttpContext httpContext, ApplicationDbContext db,
+            ILobbyEventBroadcaster lobbyEvents) =>
         {
             // Get user ID from JWT claims
             var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
@@ -192,7 +198,7 @@ public static class GameEndpoints
 
             await db.SaveChangesAsync();
 
-            await LobbyEventExtensions.BroadcastLobbyListChangedAsync(game.Id.ToString());
+            await lobbyEvents.BroadcastLobbyListChangedAsync(game.Id.ToString());
 
             // Return game response
             var gameResponse = new GameResponse
@@ -232,7 +238,8 @@ public static class GameEndpoints
         .WithName("CreateGame");
 
         // Join Game endpoint (requires authentication)
-        app.MapPost("/api/games/{id:guid}/join", async (Guid id, HttpContext httpContext, ApplicationDbContext db) =>
+        app.MapPost("/api/games/{id:guid}/join", async (Guid id, HttpContext httpContext, ApplicationDbContext db,
+            IGameEventBroadcaster gameEvents, ILobbyEventBroadcaster lobbyEvents) =>
         {
             // Get user ID from JWT claims
             var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
@@ -300,14 +307,14 @@ public static class GameEndpoints
             await db.SaveChangesAsync();
 
             // Broadcast player joined event
-            await GameEventExtensions.BroadcastPlayerJoinedAsync(
+            await gameEvents.BroadcastPlayerJoinedAsync(
                 game.Id.ToString(),
                 user.Id.ToString(),
                 user.Username,
                 user.DisplayName,
                 playerSession.Position);
 
-            await LobbyEventExtensions.BroadcastLobbyListChangedAsync(game.Id.ToString());
+            await lobbyEvents.BroadcastLobbyListChangedAsync(game.Id.ToString());
 
             // Return join response
             var joinResponse = new JoinGameResponse
@@ -334,7 +341,8 @@ public static class GameEndpoints
         .WithName("JoinGame");
 
         // Leave Game endpoint (requires authentication)
-        app.MapPost("/api/games/{id:guid}/leave", async (Guid id, HttpContext httpContext, ApplicationDbContext db) =>
+        app.MapPost("/api/games/{id:guid}/leave", async (Guid id, HttpContext httpContext, ApplicationDbContext db,
+            IGameEventBroadcaster gameEvents, ILobbyEventBroadcaster lobbyEvents) =>
         {
             // Get user ID from JWT claims
             var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
@@ -366,16 +374,20 @@ public static class GameEndpoints
                 return Results.NotFound(new { error = "You are not in this game" });
             }
 
-            // If this is the game creator and there are other players, transfer ownership
-            if (game.CreatedByUserId == userId && game.PlayerSessions.Count > 1)
+            // If the creator leaves before the game starts, delete the game and disassociate all players
+            if (game.CreatedByUserId == userId)
             {
-                // Transfer ownership to the next player (by position)
-                var nextPlayer = game.PlayerSessions
-                    .Where(ps => ps.UserId != userId)
-                    .OrderBy(ps => ps.Position)
-                    .First();
+                await gameEvents.BroadcastGameAbandonedAsync(
+                    game.Id.ToString(),
+                    userId.ToString(),
+                    "Game was deleted by the host before it started.");
 
-                game.CreatedByUserId = nextPlayer.UserId;
+                db.Games.Remove(game);
+                await db.SaveChangesAsync();
+
+                await lobbyEvents.BroadcastLobbyListChangedAsync(game.Id.ToString());
+
+                return Results.Ok(new { message = "Game deleted successfully" });
             }
 
             // Remove player session
@@ -394,13 +406,13 @@ public static class GameEndpoints
             // Broadcast player left event (only if game still exists)
             if (game.PlayerSessions.Count > 1)
             {
-                await GameEventExtensions.BroadcastPlayerLeftAsync(
+                await gameEvents.BroadcastPlayerLeftAsync(
                     game.Id.ToString(),
                     userId.ToString(),
                     leavingPosition);
             }
 
-            await LobbyEventExtensions.BroadcastLobbyListChangedAsync(game.Id.ToString());
+            await lobbyEvents.BroadcastLobbyListChangedAsync(game.Id.ToString());
 
             return Results.Ok(new { message = "Left game successfully" });
         })
@@ -408,7 +420,8 @@ public static class GameEndpoints
         .WithName("LeaveGame");
 
         // Cancel Game endpoint (requires authentication, creator only)
-        app.MapDelete("/api/games/{id:guid}", async (Guid id, HttpContext httpContext, ApplicationDbContext db) =>
+        app.MapDelete("/api/games/{id:guid}", async (Guid id, HttpContext httpContext, ApplicationDbContext db,
+            ILobbyEventBroadcaster lobbyEvents) =>
         {
             // Get user ID from JWT claims
             var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
@@ -443,15 +456,65 @@ public static class GameEndpoints
             db.Games.Remove(game);
             await db.SaveChangesAsync();
 
-            await LobbyEventExtensions.BroadcastLobbyListChangedAsync(game.Id.ToString());
+            await lobbyEvents.BroadcastLobbyListChangedAsync(game.Id.ToString());
 
             return Results.Ok(new { message = "Game cancelled successfully" });
         })
         .RequireAuthorization()
         .WithName("CancelGame");
 
+        // Abandon Game endpoint (requires authentication, creator only)
+        app.MapPost("/api/games/{id:guid}/abandon", async (Guid id, HttpContext httpContext, ApplicationDbContext db,
+            IGameEventBroadcaster gameEvents, ILobbyEventBroadcaster lobbyEvents) =>
+        {
+            // Get user ID from JWT claims
+            var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+            if (userIdClaim == null || !Guid.TryParse(userIdClaim.Value, out var userId))
+            {
+                return Results.Unauthorized();
+            }
+
+            // Find game with player sessions
+            var game = await db.Games
+                .Include(g => g.PlayerSessions)
+                .FirstOrDefaultAsync(g => g.Id == id);
+
+            if (game == null)
+            {
+                return Results.NotFound(new { error = "Game not found" });
+            }
+
+            // Check if user is the game creator
+            if (game.CreatedByUserId != userId)
+            {
+                return Results.StatusCode(403); // Forbidden
+            }
+
+            if (game.Status == GameStatus.Abandoned)
+            {
+                return Results.BadRequest(new { error = "Game is already abandoned" });
+            }
+
+            game.Status = GameStatus.Abandoned;
+            game.CompletedAt ??= DateTime.UtcNow;
+
+            await db.SaveChangesAsync();
+
+            await gameEvents.BroadcastGameAbandonedAsync(
+                game.Id.ToString(),
+                userId.ToString(),
+                "Game was abandoned by the host.");
+
+            await lobbyEvents.BroadcastLobbyListChangedAsync(game.Id.ToString());
+
+            return Results.Ok(new { message = "Game abandoned successfully" });
+        })
+        .RequireAuthorization()
+        .WithName("AbandonGame");
+
         // Start Game endpoint (requires authentication, creator only)
-        app.MapPost("/api/games/{id:guid}/start", async (Guid id, HttpContext httpContext, ApplicationDbContext db) =>
+        app.MapPost("/api/games/{id:guid}/start", async (Guid id, HttpContext httpContext, ApplicationDbContext db,
+            IGameEventBroadcaster gameEvents, ILobbyEventBroadcaster lobbyEvents) =>
         {
             // Get user ID from JWT claims
             var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
@@ -532,7 +595,7 @@ public static class GameEndpoints
             await db.SaveChangesAsync();
 
             // Broadcast game started event
-            await GameEventExtensions.BroadcastGameStartedAsync(
+            await gameEvents.BroadcastGameStartedAsync(
                 game.Id.ToString(),
                 game.StartedAt.Value,
                 dealer.Position,
@@ -544,7 +607,7 @@ public static class GameEndpoints
                     Points: ps.CurrentPoints
                 )).ToList());
 
-            await LobbyEventExtensions.BroadcastLobbyListChangedAsync(game.Id.ToString());
+            await lobbyEvents.BroadcastLobbyListChangedAsync(game.Id.ToString());
 
             // Return start game response
             var response = new StartGameResponse

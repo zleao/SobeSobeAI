@@ -23,6 +23,13 @@ export interface LoginResponse {
   user: User;
 }
 
+export interface RefreshTokenResponse {
+  accessToken: string;
+  refreshToken: string;
+  tokenType: string;
+  expiresIn: number;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -87,15 +94,14 @@ export class Auth {
     return localStorage.getItem(this.REFRESH_TOKEN_KEY);
   }
 
-  refreshAccessToken(): Observable<LoginResponse> {
+  refreshAccessToken(): Observable<RefreshTokenResponse> {
     const refreshToken = this.getRefreshToken();
     if (!refreshToken) {
       throw new Error('No refresh token available');
     }
-    return this.http.post<LoginResponse>(`${this.API_URL}/auth/refresh`, { refreshToken }).pipe(
+    return this.http.post<RefreshTokenResponse>(`${this.API_URL}/auth/refresh`, { refreshToken }).pipe(
       tap(response => {
         this.saveTokens(response.accessToken, response.refreshToken);
-        this.setCurrentUser(response.user);
       })
     );
   }

@@ -1,10 +1,9 @@
 import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Game, GameStateResponse, Card } from '../../services/game';
+import { Game, GameStateResponse, Card, getGameStatusValue } from '../../services/game';
 import { Auth } from '../../services/auth';
-import * as grpcWeb from 'grpc-web';
-import { GameEvent, GameEventsClient } from '../../services/grpc/game-events';
+import { GameRealtime } from '../../services/realtime/game-realtime';
 
 @Component({
   selector: 'app-game-board',
@@ -20,17 +19,18 @@ export class GameBoard implements OnInit, OnDestroy {
   makingDecision = signal(false);
   cardsToExchange = signal<Card[]>([]);
   exchangingCards = signal(false);
+  endingGame = signal(false);
   
   private gameId: string = '';
-  private gameStream?: grpcWeb.ClientReadableStream<GameEvent>;
   private isRefreshingToken = false;
+  private isDestroyed = false;
 
   constructor(
     private route: ActivatedRoute,
     public router: Router,
     private gameService: Game,
     public authService: Auth,
-    private gameEventsClient: GameEventsClient
+    private gameRealtime: GameRealtime
   ) {}
 
   ngOnInit() {
@@ -47,7 +47,8 @@ export class GameBoard implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.gameStream?.cancel();
+    this.isDestroyed = true;
+    void this.gameRealtime.disconnect();
   }
 
   loadGameState() {
@@ -57,8 +58,16 @@ export class GameBoard implements OnInit, OnDestroy {
         this.gameState.set(state);
         this.loading.set(false);
 
-        if (state.status === 2) {
+        const status = getGameStatusValue(state.status);
+
+        if (status === 2) {
           this.router.navigate(['/lobby']);
+        }
+
+        if (status === 3) {
+          this.router.navigate(['/lobby'], {
+            state: { redirectMessage: 'Game was abandoned. Redirecting to lobby.' }
+          });
         }
       },
       error: (err) => {
@@ -66,38 +75,58 @@ export class GameBoard implements OnInit, OnDestroy {
         this.error.set('Failed to load game state');
         this.loading.set(false);
         if (err.status === 404) {
-          this.router.navigate(['/lobby']);
+          this.router.navigate(['/lobby'], {
+            state: { redirectMessage: 'Game was deleted. Redirecting to lobby.' }
+          });
         }
       },
     });
   }
 
-  private connectGameEvents() {
-    const accessToken = this.authService.getAccessToken();
-    if (!accessToken) {
-      this.refreshTokenAndReconnect(() => this.connectGameEvents());
+  isCreator(): boolean {
+    const state = this.gameState();
+    const currentUser = this.authService.currentUser();
+    if (!state || !currentUser) {
+      return false;
+    }
+
+    return state.createdBy === currentUser.id;
+  }
+
+  endGame() {
+    if (this.endingGame()) {
       return;
     }
 
-    this.gameStream?.cancel();
-    this.gameStream = this.gameEventsClient.subscribeGame(this.gameId, accessToken);
+    this.endingGame.set(true);
+    this.error.set(null);
 
-    this.gameStream.on('data', () => {
-      this.loadGameState();
-    });
-
-    this.gameStream.on('error', (error: grpcWeb.RpcError) => {
-      console.error('Game event stream error:', error);
-      this.handleStreamError(error, () => this.connectGameEvents());
+    this.gameService.abandonGame(this.gameId).subscribe({
+      next: () => {
+        this.router.navigate(['/lobby']);
+      },
+      error: (err) => {
+        console.error('Error abandoning game:', err);
+        this.error.set(err.error?.message || 'Failed to end game');
+        this.endingGame.set(false);
+      },
     });
   }
 
-  private handleStreamError(error: grpcWeb.RpcError, reconnect: () => void): void {
-    if (error.code !== grpcWeb.StatusCode.UNAUTHENTICATED) {
+  private connectGameEvents(): void {
+    void this.gameRealtime.connect(
+      this.gameId,
+      () => this.loadGameState(),
+      error => this.handleRealtimeClose(error)
+    ).catch(error => this.handleRealtimeClose(error));
+  }
+
+  private handleRealtimeClose(_: Error | undefined): void {
+    if (this.isDestroyed) {
       return;
     }
 
-    this.refreshTokenAndReconnect(reconnect);
+    this.refreshTokenAndReconnect(() => this.connectGameEvents());
   }
 
   private refreshTokenAndReconnect(reconnect: () => void): void {
@@ -117,6 +146,7 @@ export class GameBoard implements OnInit, OnDestroy {
       }
     });
   }
+
 
   selectCard(card: Card) {
     if (this.selectedCard()?.suit === card.suit && this.selectedCard()?.rank === card.rank) {

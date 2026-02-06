@@ -10,16 +10,18 @@ module.exports = {
     changeOrigin: true,
     logLevel: 'info'
   },
-  '/sobesobe.game.GameEvents': {
+  '/hubs/game': {
     target: backendUrl,
     secure: false,
     changeOrigin: true,
+    ws: true,
     logLevel: 'info'
   },
-  '/sobesobe.game.LobbyEvents': {
+  '/hubs/lobby': {
     target: backendUrl,
     secure: false,
     changeOrigin: true,
+    ws: true,
     logLevel: 'info'
   }
 };

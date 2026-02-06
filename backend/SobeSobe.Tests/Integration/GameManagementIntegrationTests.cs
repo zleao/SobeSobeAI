@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using SobeSobe.Api.DTOs;
+using SobeSobe.Core.Enums;
 using SobeSobe.Infrastructure.Data;
 using Xunit;
 
@@ -313,8 +314,8 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         Assert.Equal(_userId1, gameDetails.Players[0].UserId);
     }
 
-    [Fact(DisplayName = "Leave game as creator transfers ownership")]
-    public async Task LeaveGame_Creator_TransfersOwnership()
+    [Fact(DisplayName = "Leave game as creator deletes game and removes all players")]
+    public async Task LeaveGame_Creator_DeletesGame()
     {
         // Setup - create game, player 2 joins
         var createRequest = new HttpRequestMessage(HttpMethod.Post, "/api/games")
@@ -337,10 +338,9 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         // Verify
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        // Verify ownership transferred to player 2
-        var gameDetails = await _client.GetFromJsonAsync<GameResponse>($"/api/games/{game.Id}");
-        Assert.Equal(_userId2, gameDetails!.CreatedBy);
-        Assert.Single(gameDetails.Players);
+        // Verify game no longer exists
+        var getResponse = await _client.GetAsync($"/api/games/{game.Id}");
+        Assert.Equal(HttpStatusCode.NotFound, getResponse.StatusCode);
     }
 
     [Fact(DisplayName = "Leave game as last player deletes game")]
@@ -366,6 +366,35 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         // Verify game no longer exists
         var getResponse = await _client.GetAsync($"/api/games/{game.Id}");
         Assert.Equal(HttpStatusCode.NotFound, getResponse.StatusCode);
+    }
+
+    [Fact(DisplayName = "Leave game after start returns 400 Bad Request")]
+    public async Task LeaveGame_GameStarted_ReturnsBadRequest()
+    {
+        // Setup - create game with 2 players
+        var createRequest = new HttpRequestMessage(HttpMethod.Post, "/api/games")
+        {
+            Content = JsonContent.Create(new CreateGameRequest { MaxPlayers = 5 })
+        };
+        createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
+        var createResponse = await _client.SendAsync(createRequest);
+        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+
+        var joinRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game!.Id}/join");
+        joinRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken2);
+        await _client.SendAsync(joinRequest);
+
+        var startRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game.Id}/start");
+        startRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
+        await _client.SendAsync(startRequest);
+
+        // Execute - player 2 tries to leave after game started
+        var leaveRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game.Id}/leave");
+        leaveRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken2);
+        var response = await _client.SendAsync(leaveRequest);
+
+        // Verify
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact(DisplayName = "Cancel game as creator succeeds")]
@@ -413,6 +442,64 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         var cancelRequest = new HttpRequestMessage(HttpMethod.Delete, $"/api/games/{game.Id}");
         cancelRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken2);
         var response = await _client.SendAsync(cancelRequest);
+
+        // Verify
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact(DisplayName = "Abandon game as creator sets status to Abandoned")]
+    public async Task AbandonGame_Creator_UpdatesStatus()
+    {
+        // Setup - create game, player 2 joins, start game
+        var createRequest = new HttpRequestMessage(HttpMethod.Post, "/api/games")
+        {
+            Content = JsonContent.Create(new CreateGameRequest { MaxPlayers = 5 })
+        };
+        createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
+        var createResponse = await _client.SendAsync(createRequest);
+        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+
+        var joinRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game!.Id}/join");
+        joinRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken2);
+        await _client.SendAsync(joinRequest);
+
+        var startRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game.Id}/start");
+        startRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
+        await _client.SendAsync(startRequest);
+
+        // Execute - creator abandons game
+        var abandonRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game.Id}/abandon");
+        abandonRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
+        var response = await _client.SendAsync(abandonRequest);
+
+        // Verify
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var gameDetails = await _client.GetFromJsonAsync<GameResponse>($"/api/games/{game.Id}");
+        Assert.Equal((int)GameStatus.Abandoned, (int)gameDetails!.Status);
+        Assert.NotNull(gameDetails.CompletedAt);
+    }
+
+    [Fact(DisplayName = "Abandon game as non-creator returns 403")]
+    public async Task AbandonGame_NonCreator_ReturnsForbidden()
+    {
+        // Setup - create game, player 2 joins
+        var createRequest = new HttpRequestMessage(HttpMethod.Post, "/api/games")
+        {
+            Content = JsonContent.Create(new CreateGameRequest { MaxPlayers = 5 })
+        };
+        createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
+        var createResponse = await _client.SendAsync(createRequest);
+        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>();
+
+        var joinRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game!.Id}/join");
+        joinRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken2);
+        await _client.SendAsync(joinRequest);
+
+        // Execute - non-creator abandons
+        var abandonRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game.Id}/abandon");
+        abandonRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken2);
+        var response = await _client.SendAsync(abandonRequest);
 
         // Verify
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);

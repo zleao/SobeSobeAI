@@ -1,10 +1,9 @@
 import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Game, GameResponse } from '../../services/game';
+import { Game, GameResponse, getGameStatusValue } from '../../services/game';
 import { Auth } from '../../services/auth';
 import { CommonModule } from '@angular/common';
-import * as grpcWeb from 'grpc-web';
-import { GameEvent, GameEventsClient } from '../../services/grpc/game-events';
+import { GameRealtime } from '../../services/realtime/game-realtime';
 
 @Component({
   selector: 'app-game-room',
@@ -21,15 +20,15 @@ export class GameRoom implements OnInit, OnDestroy {
   leavingGame = signal<boolean>(false);
   
   private gameId: string = '';
-  private gameStream?: grpcWeb.ClientReadableStream<GameEvent>;
   private isRefreshingToken = false;
+  private isDestroyed = false;
 
   constructor(
     private gameService: Game,
     private authService: Auth,
     private route: ActivatedRoute,
     private router: Router,
-    private gameEventsClient: GameEventsClient
+    private gameRealtime: GameRealtime
   ) {}
 
   ngOnInit() {
@@ -48,7 +47,8 @@ export class GameRoom implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.gameStream?.cancel();
+    this.isDestroyed = true;
+    void this.gameRealtime.disconnect();
   }
 
   private loadGame() {
@@ -61,8 +61,16 @@ export class GameRoom implements OnInit, OnDestroy {
         this.loading.set(false);
         this.checkIfCreator(game);
 
-        if (game.status === 1) {
+        const status = getGameStatusValue(game.status);
+
+        if (status === 1) {
           this.router.navigate(['/game-board', game.id]);
+        }
+
+        if (status === 3) {
+          this.router.navigate(['/lobby'], {
+            state: { redirectMessage: 'Game was abandoned. Redirecting to lobby.' }
+          });
         }
       },
       error: (err) => {
@@ -72,7 +80,9 @@ export class GameRoom implements OnInit, OnDestroy {
         
         // If game not found, navigate back to lobby
         if (err.status === 404) {
-          this.router.navigate(['/lobby']);
+          this.router.navigate(['/lobby'], {
+            state: { redirectMessage: 'Game was deleted. Redirecting to lobby.' }
+          });
         }
       }
     });
@@ -83,32 +93,20 @@ export class GameRoom implements OnInit, OnDestroy {
     this.isCreator.set(currentUser?.id === game.createdBy);
   }
 
-  private connectGameEvents() {
-    const accessToken = this.authService.getAccessToken();
-    if (!accessToken) {
-      this.refreshTokenAndReconnect(() => this.connectGameEvents());
-      return;
-    }
-
-    this.gameStream?.cancel();
-    this.gameStream = this.gameEventsClient.subscribeGame(this.gameId, accessToken);
-
-    this.gameStream.on('data', () => {
-      this.loadGame();
-    });
-
-    this.gameStream.on('error', (error: grpcWeb.RpcError) => {
-      console.error('Game event stream error:', error);
-      this.handleStreamError(error, () => this.connectGameEvents());
-    });
+  private connectGameEvents(): void {
+    void this.gameRealtime.connect(
+      this.gameId,
+      () => this.loadGame(),
+      error => this.handleRealtimeClose(error)
+    ).catch(error => this.handleRealtimeClose(error));
   }
 
-  private handleStreamError(error: grpcWeb.RpcError, reconnect: () => void): void {
-    if (error.code !== grpcWeb.StatusCode.UNAUTHENTICATED) {
+  private handleRealtimeClose(_: Error | undefined): void {
+    if (this.isDestroyed) {
       return;
     }
 
-    this.refreshTokenAndReconnect(reconnect);
+    this.refreshTokenAndReconnect(() => this.connectGameEvents());
   }
 
   private refreshTokenAndReconnect(reconnect: () => void): void {
@@ -128,6 +126,7 @@ export class GameRoom implements OnInit, OnDestroy {
       }
     });
   }
+
 
   startGame() {
     if (!this.isCreator() || this.startingGame()) {
@@ -155,11 +154,29 @@ export class GameRoom implements OnInit, OnDestroy {
       return;
     }
 
+    const currentGame = this.game();
+    const deletingGame = this.isCreator() && currentGame && getGameStatusValue(currentGame.status) === 0;
+    if (deletingGame) {
+      const confirmed = window.confirm(
+        'Leaving will delete the game and remove all players. This cannot be undone. Do you want to continue?'
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
     this.leavingGame.set(true);
     this.error.set(null);
 
     this.gameService.leaveGame(this.gameId).subscribe({
       next: () => {
+        if (deletingGame) {
+          this.router.navigate(['/lobby'], {
+            state: { redirectMessage: 'Game was deleted. Redirecting to lobby.' }
+          });
+          return;
+        }
+
         this.router.navigate(['/lobby']);
       },
       error: (err) => {
@@ -174,7 +191,9 @@ export class GameRoom implements OnInit, OnDestroy {
     const game = this.game();
     if (!game) return '';
 
-    switch (game.status) {
+    const status = getGameStatusValue(game.status);
+
+    switch (status) {
       case 0: return 'bg-yellow-100 text-yellow-800';
       case 1: return 'bg-green-100 text-green-800';
       case 2: return 'bg-blue-100 text-blue-800';
@@ -187,12 +206,42 @@ export class GameRoom implements OnInit, OnDestroy {
     const game = this.game();
     if (!game) return '';
 
-    switch (game.status) {
+    const status = getGameStatusValue(game.status);
+
+    switch (status) {
       case 0: return 'Waiting';
       case 1: return 'In Progress';
       case 2: return 'Completed';
       case 3: return 'Abandoned';
       default: return 'Unknown';
     }
+  }
+
+  getStatusSubtitle(): string {
+    const game = this.game();
+    if (!game) {
+      return '';
+    }
+
+    const status = getGameStatusValue(game.status);
+
+    switch (status) {
+      case 0:
+        return 'Waiting for players to join...';
+      case 1:
+        return 'Game is in progress.';
+      case 2:
+        return 'Game has completed.';
+      case 3:
+        return 'Game was abandoned.';
+      default:
+        return '';
+    }
+  }
+
+  getCurrentUserName(): string {
+    return this.authService.currentUser()?.displayName
+      || this.authService.currentUser()?.username
+      || 'Unknown player';
   }
 }

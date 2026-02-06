@@ -5,7 +5,7 @@ import { Observable } from 'rxjs';
 export interface GameListItem {
   id: string;
   createdBy: UserSummary;
-  status: number; // 0=Waiting, 1=InProgress, 2=Completed, 3=Abandoned
+  status: GameStatus; // 0=Waiting, 1=InProgress, 2=Completed, 3=Abandoned
   maxPlayers: number;
   currentPlayers: number;
   players: PlayerSummary[];
@@ -42,7 +42,7 @@ export interface GameResponse {
   id: string;
   createdBy: string;
   createdByUsername: string;
-  status: number;
+  status: GameStatus;
   maxPlayers: number;
   currentPlayerCount: number;
   currentDealerIndex: number | null;
@@ -75,7 +75,7 @@ export interface GameStateResponse {
   id: string;
   createdBy: string;
   createdByUsername: string;
-  status: number;
+  status: GameStatus;
   maxPlayers: number;
   currentPlayerCount: number;
   currentDealerIndex: number | null;
@@ -133,6 +133,27 @@ export interface CardPlayedResponse {
   card: Card;
 }
 
+export type GameStatus = 'Waiting' | 'InProgress' | 'Completed' | 'Abandoned' | 0 | 1 | 2 | 3;
+
+export function getGameStatusValue(status: GameStatus): number {
+  if (typeof status === 'number') {
+    return status;
+  }
+
+  switch (status) {
+    case 'Waiting':
+      return 0;
+    case 'InProgress':
+      return 1;
+    case 'Completed':
+      return 2;
+    case 'Abandoned':
+      return 3;
+    default:
+      return -1;
+  }
+}
+
 export interface SelectTrumpRequest {
   trumpSuit: string;
   selectedBeforeDealing: boolean;
@@ -150,10 +171,20 @@ export class Game {
 
   constructor(private http: HttpClient) {}
 
-  listGames(status?: number, page: number = 1, pageSize: number = 20): Observable<ListGamesResponse> {
+  listGames(options?: {
+    status?: number;
+    availableOnly?: boolean;
+    page?: number;
+    pageSize?: number;
+  }): Observable<ListGamesResponse> {
+    const page = options?.page ?? 1;
+    const pageSize = options?.pageSize ?? 20;
     let url = `${this.API_URL}/games?page=${page}&pageSize=${pageSize}`;
-    if (status !== undefined) {
-      url += `&status=${status}`;
+    if (options?.status !== undefined) {
+      url += `&status=${options.status}`;
+    }
+    if (options?.availableOnly !== undefined) {
+      url += `&availableOnly=${options.availableOnly}`;
     }
     return this.http.get<ListGamesResponse>(url);
   }
@@ -172,6 +203,10 @@ export class Game {
 
   leaveGame(id: string): Observable<any> {
     return this.http.post<any>(`${this.API_URL}/games/${id}/leave`, {});
+  }
+
+  abandonGame(id: string): Observable<any> {
+    return this.http.post<any>(`${this.API_URL}/games/${id}/abandon`, {});
   }
 
   startGame(id: string): Observable<any> {

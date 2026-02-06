@@ -1,10 +1,11 @@
-using Grpc.AspNetCore.Web;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using SobeSobe.Api.Endpoints;
+using SobeSobe.Api.Hubs;
 using SobeSobe.Api.Options;
 using SobeSobe.Api.Services;
+using SobeSobe.Api.Services.Realtime;
 using SobeSobe.Api.Seed;
 using SobeSobe.Infrastructure.Data;
 using Scalar.AspNetCore;
@@ -66,6 +67,22 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
         // Don't map claims automatically
         options.MapInboundClaims = false;
+
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"].ToString();
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrWhiteSpace(accessToken)
+                    && (path.StartsWithSegments("/hubs/game") || path.StartsWithSegments("/hubs/lobby")))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddAuthorization();
@@ -74,21 +91,23 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<JwtTokenService>();
 builder.Services.AddScoped<TrickTakingService>();
 
-// Add gRPC services
-builder.Services.AddGrpc();
+builder.Services.AddSignalR(options =>
+{
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+    options.ClientTimeoutInterval = TimeSpan.FromSeconds(45);
+});
 
-// Allow gRPC-Web from the frontend dev server
+builder.Services.AddSingleton<IGameEventBroadcaster, SignalRGameEventBroadcaster>();
+builder.Services.AddSingleton<ILobbyEventBroadcaster, SignalRLobbyEventBroadcaster>();
+
+// Allow SignalR connections from the frontend dev server
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("GrpcWebPolicy", policy =>
+    options.AddPolicy("FrontendPolicy", policy =>
         policy.WithOrigins("http://localhost:4200", "https://localhost:4200")
             .AllowAnyHeader()
             .AllowAnyMethod()
-            .WithExposedHeaders(
-                "Grpc-Status",
-                "Grpc-Message",
-                "Grpc-Encoding",
-                "Grpc-Accept-Encoding"));
+            .AllowCredentials());
 });
 
 // Add services to the container.
@@ -125,15 +144,14 @@ else
     app.UseHttpsRedirection();
 }
 
-app.UseCors("GrpcWebPolicy");
-app.UseGrpcWeb(new GrpcWebOptions { DefaultEnabled = true });
+app.UseCors("FrontendPolicy");
 
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Map gRPC services
-app.MapGrpcService<GameEventsService>().EnableGrpcWeb();
-app.MapGrpcService<LobbyEventsService>().EnableGrpcWeb();
+// Map SignalR hubs
+app.MapHub<GameHub>("/hubs/game");
+app.MapHub<LobbyHub>("/hubs/lobby");
 
 app.MapAuthEndpoints();
 app.MapUserEndpoints();

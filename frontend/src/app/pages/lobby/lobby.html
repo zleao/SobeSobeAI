@@ -16,6 +16,14 @@
     </div>
   </nav>
 
+  @if (toastMessage()) {
+    <div class="fixed top-4 right-4 z-50">
+      <div class="bg-indigo-600 text-white px-4 py-3 rounded-lg shadow-lg">
+        {{ toastMessage() }}
+      </div>
+    </div>
+  }
+
   <div class="max-w-7xl mx-auto p-6">
     @if (errorMessage()) {
       <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -119,10 +127,10 @@
                 <p class="text-sm text-gray-500">{{ game.createdAt | date:'short' }}</p>
               </div>
               <span class="px-3 py-1 text-xs font-medium rounded-full"
-                [class.bg-yellow-100]="game.status === 0"
-                [class.text-yellow-800]="game.status === 0"
-                [class.bg-green-100]="game.status === 1"
-                [class.text-green-800]="game.status === 1"
+                [class.bg-yellow-100]="getStatusValue(game.status) === 0"
+                [class.text-yellow-800]="getStatusValue(game.status) === 0"
+                [class.bg-green-100]="getStatusValue(game.status) === 1"
+                [class.text-green-800]="getStatusValue(game.status) === 1"
               >
                 {{ getStatusLabel(game.status) }}
               </span>

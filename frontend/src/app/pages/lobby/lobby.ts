@@ -1,10 +1,9 @@
 import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { Auth } from '../../services/auth';
-import { Game, GameListItem } from '../../services/game';
+import { Game, GameListItem, GameStatus, getGameStatusValue } from '../../services/game';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
-import * as grpcWeb from 'grpc-web';
-import { LobbyEvent, LobbyEventsClient } from '../../services/grpc/lobby-events';
+import { LobbyRealtime } from '../../services/realtime/lobby-realtime';
 
 @Component({
   selector: 'app-lobby',
@@ -18,25 +17,49 @@ export class Lobby implements OnInit, OnDestroy {
   isCreatingGame = signal(false);
   isManualRefresh = signal(false);
   errorMessage = signal<string | null>(null);
+  toastMessage = signal<string | null>(null);
   showCreateGameModal = signal(false);
   selectedMaxPlayers = signal<number>(5);
-  private lobbyStream?: grpcWeb.ClientReadableStream<LobbyEvent>;
   private isRefreshingToken = false;
+  private isDestroyed = false;
+  private toastTimeoutId?: number;
 
   constructor(
     public authService: Auth,
     private gameService: Game,
     private router: Router,
-    private lobbyEventsClient: LobbyEventsClient
+    private lobbyRealtime: LobbyRealtime
   ) {}
 
   ngOnInit(): void {
+    this.showRedirectToast();
     this.loadGames();
     this.connectLobbyEvents();
   }
 
   ngOnDestroy(): void {
-    this.lobbyStream?.cancel();
+    this.isDestroyed = true;
+    if (this.toastTimeoutId !== undefined) {
+      window.clearTimeout(this.toastTimeoutId);
+    }
+    void this.lobbyRealtime.disconnect();
+  }
+
+  private showRedirectToast(): void {
+    const message = history.state?.redirectMessage;
+    if (typeof message !== 'string' || message.trim().length === 0) {
+      return;
+    }
+
+    this.toastMessage.set(message);
+
+    if (this.toastTimeoutId !== undefined) {
+      window.clearTimeout(this.toastTimeoutId);
+    }
+
+    this.toastTimeoutId = window.setTimeout(() => {
+      this.toastMessage.set(null);
+    }, 3500);
   }
 
   loadGames(options?: { manual?: boolean; showErrors?: boolean }): void {
@@ -54,7 +77,7 @@ export class Lobby implements OnInit, OnDestroy {
     }
 
     // List all games
-    this.gameService.listGames().subscribe({
+    this.gameService.listGames({ availableOnly: true }).subscribe({
       next: (response) => {
         this.games.set(response.games);
         this.isLoadingGames.set(false);
@@ -75,31 +98,18 @@ export class Lobby implements OnInit, OnDestroy {
   }
 
   private connectLobbyEvents(): void {
-    const accessToken = this.authService.getAccessToken();
-    if (!accessToken) {
-      this.refreshTokenAndReconnect(() => this.connectLobbyEvents());
-      return;
-    }
-
-    this.lobbyStream?.cancel();
-    this.lobbyStream = this.lobbyEventsClient.subscribeLobby(accessToken);
-
-    this.lobbyStream.on('data', () => {
-      this.loadGames({ showErrors: false });
-    });
-
-    this.lobbyStream.on('error', (error: grpcWeb.RpcError) => {
-      console.error('Lobby event stream error:', error);
-      this.handleStreamError(error, () => this.connectLobbyEvents());
-    });
+    void this.lobbyRealtime.connect(
+      () => this.loadGames({ showErrors: false }),
+      error => this.handleRealtimeClose(error)
+    ).catch(error => this.handleRealtimeClose(error));
   }
 
-  private handleStreamError(error: grpcWeb.RpcError, reconnect: () => void): void {
-    if (error.code !== grpcWeb.StatusCode.UNAUTHENTICATED) {
+  private handleRealtimeClose(_: Error | undefined): void {
+    if (this.isDestroyed) {
       return;
     }
 
-    this.refreshTokenAndReconnect(reconnect);
+    this.refreshTokenAndReconnect(() => this.connectLobbyEvents());
   }
 
   private refreshTokenAndReconnect(reconnect: () => void): void {
@@ -119,6 +129,7 @@ export class Lobby implements OnInit, OnDestroy {
       }
     });
   }
+
 
   openCreateGameModal(): void {
     this.showCreateGameModal.set(true);
@@ -178,13 +189,17 @@ export class Lobby implements OnInit, OnDestroy {
     this.authService.logout();
   }
 
-  getStatusLabel(status: number): string {
-    switch (status) {
+  getStatusLabel(status: GameStatus): string {
+    switch (getGameStatusValue(status)) {
       case 0: return 'Waiting';
       case 1: return 'In Progress';
       case 2: return 'Completed';
       case 3: return 'Abandoned';
       default: return 'Unknown';
     }
+  }
+
+  getStatusValue(status: GameStatus): number {
+    return getGameStatusValue(status);
   }
 }
