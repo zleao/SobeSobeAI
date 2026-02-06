@@ -74,6 +74,16 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+// Ensure database exists and all migrations are applied on startup.
+// This is important for local dev and self-hosted deployments where the SQLite file
+// may be deleted between restarts.
+if (!useInMemoryDatabase)
+{
+    using var scope = app.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await db.Database.MigrateAsync();
+}
+
 // Map Aspire service defaults (health checks)
 app.MapDefaultEndpoints();
 
