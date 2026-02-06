@@ -39,11 +39,13 @@ export interface CreateGameRequest {
 
 export interface GameResponse {
   id: string;
-  createdBy: UserSummary;
+  createdBy: string;
+  createdByUsername: string;
   status: number;
   maxPlayers: number;
-  currentDealerPosition: number | null;
-  currentRoundNumber: number | null;
+  currentPlayerCount: number;
+  currentDealerIndex: number | null;
+  currentRoundNumber: number;
   players: PlayerSessionResponse[];
   createdAt: string;
   startedAt: string | null;
@@ -61,7 +63,6 @@ export interface PlayerSessionResponse {
   isActive: boolean;
   consecutiveRoundsOut: number;
   joinedAt: string;
-  leftAt: string | null;
 }
 
 export interface Card {
@@ -71,52 +72,63 @@ export interface Card {
 
 export interface GameStateResponse {
   id: string;
+  createdBy: string;
+  createdByUsername: string;
   status: number;
   maxPlayers: number;
-  currentDealerPosition: number | null;
-  currentRoundNumber: number | null;
-  createdBy: UserSummary;
+  currentPlayerCount: number;
+  currentDealerIndex: number | null;
+  currentRoundNumber: number;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
   players: PlayerStateResponse[];
   currentRound: RoundStateResponse | null;
-  myHand: Card[] | null;
 }
 
 export interface PlayerStateResponse {
-  playerSessionId: string;
+  id: string;
   userId: string;
   username: string;
   displayName: string;
   avatarUrl: string | null;
   position: number;
   currentPoints: number;
+  isActive: boolean;
   consecutiveRoundsOut: number;
   joinedAt: string;
   leftAt: string | null;
+  hand?: Card[] | null;
 }
 
 export interface RoundStateResponse {
-  roundId: string;
+  id: string;
   roundNumber: number;
-  dealerPosition: number;
-  partyPlayerPosition: number;
-  trumpSuit: string | null;
+  dealerUserId: string;
+  partyPlayerUserId: string;
+  trumpSuit: string;
   trumpSelectedBeforeDealing: boolean;
   trickValue: number;
   currentTrickNumber: number;
   status: number; // 0=Dealing, 1=TrumpSelection, 2=PlayerDecisions, 3=CardExchange, 4=Playing, 5=Completed
   tricks: TrickStateResponse[];
   currentTrick: TrickStateResponse | null;
+  startedAt: string;
+  completedAt: string | null;
 }
 
 export interface TrickStateResponse {
+  id: string;
   trickNumber: number;
-  leadPlayerPosition: number;
-  winnerPosition: number | null;
+  leadPlayerSessionId: string;
+  winnerPlayerSessionId: string | null;
   cardsPlayed: CardPlayedResponse[];
+  completedAt: string | null;
 }
 
 export interface CardPlayedResponse {
-  position: number;
+  playerSessionId: string;
+  playerPosition: number;
   card: Card;
 }
 

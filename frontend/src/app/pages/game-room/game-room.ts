@@ -94,7 +94,7 @@ export class GameRoom implements OnInit, OnDestroy {
 
   private checkIfCreator(game: GameResponse) {
     const currentUser = this.authService.currentUser();
-    this.isCreator.set(currentUser?.id === game.createdBy.id);
+    this.isCreator.set(currentUser?.id === game.createdBy);
   }
 
   startGame() {

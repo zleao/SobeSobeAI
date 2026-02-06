@@ -22,6 +22,7 @@
           <div class="flex justify-between items-center">
             <div>
               <h1 class="text-2xl font-bold text-gray-900">SobeSobe Game</h1>
+              <p class="text-sm text-gray-500">Logged in as {{ getCurrentUserName() }}</p>
               @if (gameState()!.currentRound) {
                 <p class="text-gray-600">
                   Round {{ gameState()!.currentRound!.roundNumber }} - {{ getRoundStatusText(gameState()!.currentRound!.status) }}
@@ -49,18 +50,23 @@
         <!-- Trump Selection (if needed) -->
         @if (gameState()!.currentRound && gameState()!.currentRound!.status === 1) {
           <div class="bg-white rounded-lg shadow-lg p-6">
-            <h2 class="text-xl font-bold mb-4">Select Trump Suit</h2>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-              @for (suit of ['Hearts', 'Diamonds', 'Clubs', 'Spades']; track suit) {
-                <button
-                  (click)="selectTrump(suit, false)"
-                  [class]="'flex items-center justify-center gap-2 px-6 py-8 rounded-lg border-2 hover:border-blue-500 hover:bg-blue-50 transition-colors ' + getCardColor(suit)"
-                >
-                  <span class="text-4xl">{{ getCardSymbol(suit) }}</span>
-                  <span class="text-lg font-semibold">{{ suit }}</span>
-                </button>
-              }
-            </div>
+            @if (isPartyPlayer()) {
+              <h2 class="text-xl font-bold mb-4">Select Trump Suit</h2>
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                @for (suit of ['Hearts', 'Diamonds', 'Clubs', 'Spades']; track suit) {
+                  <button
+                    (click)="selectTrump(suit, false)"
+                    [class]="'flex items-center justify-center gap-2 px-6 py-8 rounded-lg border-2 hover:border-blue-500 hover:bg-blue-50 transition-colors ' + getCardColor(suit)"
+                  >
+                    <span class="text-4xl">{{ getCardSymbol(suit) }}</span>
+                    <span class="text-lg font-semibold">{{ suit }}</span>
+                  </button>
+                }
+              </div>
+            } @else {
+              <h2 class="text-xl font-bold mb-2">Waiting for trump selection</h2>
+              <p class="text-gray-600">Waiting for {{ getPartyPlayerName() }} to choose the trump suit.</p>
+            }
           </div>
         }
 
@@ -100,7 +106,7 @@
         }
 
         <!-- Card Exchange -->
-        @if (gameState()!.currentRound && gameState()!.currentRound!.status === 3 && gameState()!.myHand && gameState()!.myHand!.length > 0) {
+        @if (gameState()!.currentRound && gameState()!.currentRound!.status === 3 && getMyHand().length > 0) {
           <div class="bg-white rounded-lg shadow-lg p-6">
             <h2 class="text-xl font-bold mb-4">Card Exchange</h2>
             <p class="text-gray-600 mb-6">
@@ -110,7 +116,7 @@
               }
             </p>
             <div class="flex justify-center gap-4 flex-wrap mb-6">
-              @for (card of gameState()!.myHand; track card.suit + card.rank) {
+              @for (card of getMyHand(); track card.suit + card.rank) {
                 <button
                   (click)="toggleCardForExchange(card)"
                   [disabled]="exchangingCards() || (card.rank === 'Ace' && card.suit === gameState()!.currentRound!.trumpSuit)"
@@ -147,7 +153,7 @@
 
         <!-- Players Info -->
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-          @for (player of gameState()!.players; track player.playerSessionId) {
+          @for (player of gameState()!.players; track player.id) {
             <div [class]="'bg-white rounded-lg shadow p-4 ' + (player.userId === authService.currentUser()?.id ? 'ring-2 ring-blue-500' : '')">
               <div class="flex items-center gap-2 mb-2">
                 <div class="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-bold">
@@ -160,10 +166,10 @@
               </div>
               <div class="flex justify-between items-center">
                 <span class="text-lg font-bold text-blue-600">{{ player.currentPoints }} pts</span>
-                @if (gameState()!.currentRound && player.position === gameState()!.currentRound!.dealerPosition) {
+                @if (gameState()!.currentRound && player.userId === gameState()!.currentRound!.dealerUserId) {
                   <span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">Dealer</span>
                 }
-                @if (gameState()!.currentRound && player.position === gameState()!.currentRound!.partyPlayerPosition) {
+                @if (gameState()!.currentRound && player.userId === gameState()!.currentRound!.partyPlayerUserId) {
                   <span class="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">Party</span>
                 }
               </div>
@@ -176,7 +182,7 @@
           <div class="bg-white rounded-lg shadow-lg p-6">
             <h2 class="text-xl font-bold mb-4">Current Trick #{{ gameState()!.currentRound!.currentTrick!.trickNumber }}</h2>
             <div class="flex justify-center gap-4 flex-wrap">
-              @for (played of gameState()!.currentRound!.currentTrick!.cardsPlayed; track played.position) {
+              @for (played of gameState()!.currentRound!.currentTrick!.cardsPlayed; track played.playerPosition) {
                 <div class="text-center">
                   <div class="w-24 h-36 bg-white border-2 border-gray-300 rounded-lg shadow-md p-2 flex flex-col items-center justify-center">
                     <div [class]="'text-4xl ' + getCardColor(played.card.suit)">
@@ -186,7 +192,7 @@
                       {{ getRankDisplay(played.card.rank) }}
                     </div>
                   </div>
-                  <p class="text-sm text-gray-600 mt-1">Pos {{ played.position }}</p>
+                  <p class="text-sm text-gray-600 mt-1">Pos {{ played.playerPosition }}</p>
                 </div>
               }
             </div>
@@ -194,7 +200,7 @@
         }
 
         <!-- My Hand -->
-        @if (gameState()!.myHand && gameState()!.myHand!.length > 0) {
+        @if (getMyHand().length > 0) {
           <div class="bg-white rounded-lg shadow-lg p-6">
             <div class="flex justify-between items-center mb-4">
               <h2 class="text-xl font-bold">Your Hand</h2>
@@ -205,7 +211,7 @@
               }
             </div>
             <div class="flex justify-center gap-4 flex-wrap">
-              @for (card of gameState()!.myHand; track card.suit + card.rank) {
+              @for (card of getMyHand(); track card.suit + card.rank) {
                 <button
                   (click)="selectCard(card)"
                   [disabled]="!isMyTurn()"
@@ -241,12 +247,12 @@
             <h2 class="text-xl font-bold mb-4">Completed Tricks</h2>
             <div class="space-y-2">
               @for (trick of gameState()!.currentRound!.tricks; track trick.trickNumber) {
-                @if (trick.winnerPosition !== null) {
+                @if (trick.winnerPlayerSessionId !== null) {
                   <div class="flex items-center gap-4 p-3 bg-gray-50 rounded">
                     <span class="font-semibold">Trick {{ trick.trickNumber }}:</span>
-                    <span class="text-gray-600">Won by Position {{ trick.winnerPosition }}</span>
+                    <span class="text-gray-600">Won by {{ getWinnerLabel(trick) }}</span>
                     <div class="flex gap-2 ml-auto">
-                      @for (played of trick.cardsPlayed; track played.position) {
+                      @for (played of trick.cardsPlayed; track played.playerPosition) {
                         <div [class]="'text-sm ' + getCardColor(played.card.suit)">
                           {{ getRankDisplay(played.card.rank) }}{{ getCardSymbol(played.card.suit) }}
                         </div>

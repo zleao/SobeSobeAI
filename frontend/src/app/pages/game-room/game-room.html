@@ -34,7 +34,7 @@
           <div class="grid grid-cols-2 gap-4">
             <div>
               <p class="text-sm text-gray-500">Created by</p>
-              <p class="text-lg font-medium text-gray-900">{{ game()!.createdBy.displayName }}</p>
+              <p class="text-lg font-medium text-gray-900">{{ game()!.createdByUsername }}</p>
             </div>
             <div>
               <p class="text-sm text-gray-500">Max Players</p>
@@ -72,7 +72,7 @@
                 <div class="flex-1 min-w-0">
                   <p class="text-sm font-medium text-gray-900 truncate">
                     {{ player.displayName }}
-                    @if (player.userId === game()!.createdBy.id) {
+                    @if (player.userId === game()!.createdBy) {
                       <span class="ml-2 text-xs text-indigo-600 font-semibold">(Host)</span>
                     }
                   </p>
