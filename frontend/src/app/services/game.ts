@@ -20,6 +20,7 @@ export interface UserSummary {
 }
 
 export interface PlayerSummary {
+  userId: string;
   position: number;
   username: string;
   displayName: string;
