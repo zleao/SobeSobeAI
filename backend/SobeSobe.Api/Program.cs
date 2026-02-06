@@ -8,8 +8,15 @@ using SobeSobe.Api.Seed;
 using SobeSobe.Infrastructure.Data;
 using Scalar.AspNetCore;
 using System.Text;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Configure JSON options to support string enums
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 
 // Add Aspire service defaults (telemetry, health checks, service discovery)
 builder.AddServiceDefaults();
@@ -81,12 +88,10 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-if (!useInMemoryDatabase)
-{
-    using var scope = app.Services.CreateScope();
-    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    await db.Database.MigrateAsync();
-}
+    if (!useInMemoryDatabase)
+    {
+        await db.Database.MigrateAsync();
+    }
 
     await UserSeeder.SeedAsync(db);
 }
