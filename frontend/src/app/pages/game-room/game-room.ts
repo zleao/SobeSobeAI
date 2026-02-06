@@ -187,6 +187,10 @@ export class GameRoom implements OnInit, OnDestroy {
     });
   }
 
+  goToLobby() {
+    this.router.navigate(['/lobby']);
+  }
+
   getStatusBadgeClass(): string {
     const game = this.game();
     if (!game) return '';
