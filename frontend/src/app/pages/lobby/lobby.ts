@@ -1,6 +1,6 @@
 import { Component, signal, OnInit } from '@angular/core';
 import { Auth } from '../../services/auth';
-import { Game, GameListItem } from '../../services/game';
+import { Game, GameListItem, CreateGameRequest } from '../../services/game';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
 
@@ -37,7 +37,7 @@ export class Lobby implements OnInit {
         this.games.set(response.games);
         this.isLoading.set(false);
       },
-      error: () => {
+      error: (error) => {
         this.errorMessage.set('Failed to load games. Please try again.');
         this.isLoading.set(false);
       }
@@ -62,7 +62,7 @@ export class Lobby implements OnInit {
         // Navigate to game room after creating
         this.router.navigate(['/game-room', game.id]);
       },
-      error: () => {
+      error: (error) => {
         this.errorMessage.set('Failed to create game. Please try again.');
         this.isLoading.set(false);
       }
@@ -71,19 +71,6 @@ export class Lobby implements OnInit {
 
   selectMaxPlayers(count: number): void {
     this.selectedMaxPlayers.set(count);
-  }
-
-  isCurrentUserInGame(game: GameListItem): boolean {
-    const userId = this.authService.currentUser()?.id;
-    if (!userId) {
-      return false;
-    }
-
-    return game.players.some(player => player.userId === userId);
-  }
-
-  onOpenGame(gameId: string): void {
-    this.router.navigate(['/game-room', gameId]);
   }
 
   onJoinGame(gameId: string): void {

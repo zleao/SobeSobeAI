@@ -135,26 +135,17 @@
               }
             </div>
 
-            @if (isCurrentUserInGame(game)) {
-              <button
-                (click)="onOpenGame(game.id)"
-                class="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700 transition"
-              >
-                Open Game
-              </button>
-            } @else {
-              <button
-                (click)="onJoinGame(game.id)"
-                [disabled]="game.currentPlayers >= game.maxPlayers"
-                class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
-              >
-                @if (game.currentPlayers >= game.maxPlayers) {
-                  <span>Game Full</span>
-                } @else {
-                  <span>Join Game</span>
-                }
-              </button>
-            }
+            <button
+              (click)="onJoinGame(game.id)"
+              [disabled]="game.currentPlayers >= game.maxPlayers"
+              class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+            >
+              @if (game.currentPlayers >= game.maxPlayers) {
+                <span>Game Full</span>
+              } @else {
+                <span>Join Game</span>
+              }
+            </button>
           </div>
         }
       </div>
