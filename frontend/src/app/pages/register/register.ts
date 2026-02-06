@@ -48,45 +48,8 @@ export class Register {
       },
       error: (error) => {
         this.isLoading.set(false);
-        this.errorMessage.set(this.getErrorMessage(error));
+        this.errorMessage.set(error.error?.message || error.error || 'Registration failed. Please try again.');
       }
     });
-  }
-
-  private getErrorMessage(error: unknown): string {
-    if (typeof error === 'string') {
-      return error;
-    }
-
-    if (error && typeof error === 'object') {
-      const maybeError = error as { error?: unknown; message?: unknown; statusText?: unknown };
-      const payload = maybeError.error;
-      if (typeof payload === 'string') {
-        return payload;
-      }
-
-      if (payload && typeof payload === 'object') {
-        const payloadObj = payload as { error?: unknown; message?: unknown; errors?: unknown };
-        if (typeof payloadObj.error === 'string') {
-          return payloadObj.error;
-        }
-        if (typeof payloadObj.message === 'string') {
-          return payloadObj.message;
-        }
-        if (Array.isArray(payloadObj.errors) && payloadObj.errors.length > 0) {
-          return String(payloadObj.errors[0]);
-        }
-      }
-
-      if (typeof maybeError.message === 'string') {
-        return maybeError.message;
-      }
-
-      if (typeof maybeError.statusText === 'string' && maybeError.statusText.length > 0) {
-        return maybeError.statusText;
-      }
-    }
-
-    return 'Registration failed. Please try again.';
   }
 }

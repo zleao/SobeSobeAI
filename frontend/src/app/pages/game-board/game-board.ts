@@ -116,7 +116,7 @@ export class GameBoard implements OnInit, OnDestroy {
       },
       error: (err) => {
         console.error('Error selecting trump:', err);
-        this.error.set(err.error?.error || err.error?.message || 'Failed to select trump');
+        this.error.set(err.error?.error?.message || 'Failed to select trump');
         setTimeout(() => this.error.set(null), 3000);
       },
     });
@@ -161,20 +161,17 @@ export class GameBoard implements OnInit, OnDestroy {
     const cardsPlayedCount = currentTrick.cardsPlayed.length;
     if (cardsPlayedCount === 0) {
       // First card of trick - lead player plays
-      return myPlayer.id === currentTrick.leadPlayerSessionId;
-    } else {
+      return myPlayer.position === currentTrick.leadPlayerPosition;
+    } else if (cardsPlayedCount < state.players.length) {
       // Find next player in counter-clockwise order
-      const lastPlayerPosition = currentTrick.cardsPlayed[cardsPlayedCount - 1].playerPosition;
-      const activePlayers = state.players
-        .filter(p => p.leftAt === null && p.isActive)
-        .sort((a, b) => a.position - b.position);
-      if (cardsPlayedCount >= activePlayers.length) {
-        return false;
-      }
+      const lastPlayerPosition = currentTrick.cardsPlayed[cardsPlayedCount - 1].position;
+      const activePlayers = state.players.filter(p => p.leftAt === null).sort((a, b) => a.position - b.position);
       const lastIndex = activePlayers.findIndex(p => p.position === lastPlayerPosition);
       const nextPlayer = activePlayers[(lastIndex + 1) % activePlayers.length];
       return myPlayer.position === nextPlayer.position;
     }
+
+    return false;
   }
 
   getRoundStatusText(status: number): string {
@@ -210,7 +207,10 @@ export class GameBoard implements OnInit, OnDestroy {
     const currentUser = this.authService.currentUser();
     if (!state || !currentUser || !state.currentRound) return false;
 
-    return state.currentRound.partyPlayerUserId === currentUser.id;
+    const myPlayer = state.players.find(p => p.userId === currentUser.id);
+    if (!myPlayer) return false;
+
+    return myPlayer.position === state.currentRound.partyPlayerPosition;
   }
 
   isDealer(): boolean {
@@ -218,7 +218,10 @@ export class GameBoard implements OnInit, OnDestroy {
     const currentUser = this.authService.currentUser();
     if (!state || !currentUser || !state.currentRound) return false;
 
-    return state.currentRound.dealerUserId === currentUser.id;
+    const myPlayer = state.players.find(p => p.userId === currentUser.id);
+    if (!myPlayer) return false;
+
+    return myPlayer.position === state.currentRound.dealerPosition;
   }
 
   getMyPoints(): number {
@@ -228,26 +231,6 @@ export class GameBoard implements OnInit, OnDestroy {
 
     const myPlayer = state.players.find(p => p.userId === currentUser.id);
     return myPlayer?.currentPoints || 0;
-  }
-
-  getCurrentUserName(): string {
-    return this.authService.currentUser()?.displayName || this.authService.currentUser()?.username || 'Unknown player';
-  }
-
-  getPartyPlayerName(): string {
-    const state = this.gameState();
-    if (!state || !state.currentRound) return 'Unknown player';
-    const partyPlayer = state.players.find(p => p.userId === state.currentRound!.partyPlayerUserId);
-    return partyPlayer?.displayName || partyPlayer?.username || 'Unknown player';
-  }
-
-  getMyHand(): Card[] {
-    const state = this.gameState();
-    const currentUser = this.authService.currentUser();
-    if (!state || !currentUser) return [];
-
-    const myPlayer = state.players.find(p => p.userId === currentUser.id);
-    return myPlayer?.hand ?? [];
   }
 
   toggleCardForExchange(card: Card) {
@@ -286,20 +269,5 @@ export class GameBoard implements OnInit, OnDestroy {
         this.exchangingCards.set(false);
       },
     });
-  }
-
-  getWinnerLabel(trick: { winnerPlayerSessionId: string | null }): string {
-    if (!trick.winnerPlayerSessionId) {
-      return 'Unknown';
-    }
-    const state = this.gameState();
-    if (!state) {
-      return 'Unknown';
-    }
-    const winner = state.players.find(p => p.id === trick.winnerPlayerSessionId);
-    if (!winner) {
-      return 'Unknown';
-    }
-    return `${winner.displayName} (Position ${winner.position})`;
   }
 }
