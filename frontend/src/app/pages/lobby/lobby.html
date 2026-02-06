@@ -72,20 +72,33 @@
 
     <div class="flex justify-between items-center mb-6">
       <h2 class="text-2xl font-bold text-gray-800">Available Games</h2>
-      <button
-        (click)="openCreateGameModal()"
-        [disabled]="isLoading()"
-        class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 disabled:bg-gray-400 transition"
-      >
-        @if (isLoading()) {
-          <span>Creating...</span>
-        } @else {
-          <span>+ Create Game</span>
-        }
-      </button>
+      <div class="flex items-center gap-3">
+        <button
+          (click)="onRefreshGames()"
+          [disabled]="isLoadingGames()"
+          class="bg-white text-gray-800 px-4 py-2 rounded border border-gray-300 hover:bg-gray-50 disabled:bg-gray-200 transition"
+        >
+          @if (isManualRefresh()) {
+            <span>Refreshing...</span>
+          } @else {
+            <span>Refresh</span>
+          }
+        </button>
+        <button
+          (click)="openCreateGameModal()"
+          [disabled]="isCreatingGame()"
+          class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 disabled:bg-gray-400 transition"
+        >
+          @if (isCreatingGame()) {
+            <span>Creating...</span>
+          } @else {
+            <span>+ Create Game</span>
+          }
+        </button>
+      </div>
     </div>
 
-    @if (isLoading() && games().length === 0) {
+    @if (isLoadingGames() && games().length === 0) {
       <div class="text-center py-12">
         <p class="text-gray-600">Loading games...</p>
       </div>

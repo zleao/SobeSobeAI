@@ -1,32 +1,32 @@
 using Grpc.Core;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using SobeSobe.Api.Protos;
 using SobeSobe.Infrastructure.Data;
 using System.Collections.Concurrent;
 using System.IdentityModel.Tokens.Jwt;
-using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using Microsoft.EntityFrameworkCore;
 
 namespace SobeSobe.Api.Services;
 
 /// <summary>
-/// gRPC service for streaming game events to connected clients
+/// gRPC service for streaming lobby events to connected clients.
 /// </summary>
-public class GameEventsService : GameEvents.GameEventsBase
+public class LobbyEventsService : LobbyEvents.LobbyEventsBase
 {
     private readonly ApplicationDbContext _context;
     private readonly IConfiguration _configuration;
-    private readonly ILogger<GameEventsService> _logger;
-    
-    // Thread-safe dictionary to track subscribers by game ID
-    // Each game can have multiple subscribers (players watching the game)
-    private static readonly ConcurrentDictionary<string, ConcurrentBag<IServerStreamWriter<GameEvent>>> 
-        _subscribers = new();
+    private readonly ILogger<LobbyEventsService> _logger;
 
-    public GameEventsService(
+    private static readonly ConcurrentBag<IServerStreamWriter<LobbyEvent>> _subscribers = new();
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LobbyEventsService"/> class.
+    /// </summary>
+    public LobbyEventsService(
         ApplicationDbContext context,
         IConfiguration configuration,
-        ILogger<GameEventsService> logger)
+        ILogger<LobbyEventsService> logger)
     {
         _context = context;
         _configuration = configuration;
@@ -34,16 +34,15 @@ public class GameEventsService : GameEvents.GameEventsBase
     }
 
     /// <summary>
-    /// Subscribe to game events stream
+    /// Subscribes the caller to lobby events.
     /// </summary>
-    public override async Task Subscribe(
-        SubscribeRequest request,
-        IServerStreamWriter<GameEvent> responseStream,
+    public override async Task SubscribeLobby(
+        LobbySubscribeRequest request,
+        IServerStreamWriter<LobbyEvent> responseStream,
         ServerCallContext context)
     {
         try
         {
-            // Validate access token and extract user ID
             var accessToken = ExtractAccessToken(request.AccessToken, context);
             if (accessToken is null)
             {
@@ -51,122 +50,66 @@ public class GameEventsService : GameEvents.GameEventsBase
             }
 
             var userId = await ValidateAccessTokenAsync(accessToken);
-            if (userId == null)
+            if (userId is null)
             {
                 throw new RpcException(new Status(StatusCode.Unauthenticated, "Invalid access token"));
             }
 
-            // Verify game exists
-            var gameExists = await _context.Games.AnyAsync(g => g.Id.ToString() == request.GameId);
-            if (!gameExists)
+            var userExists = await _context.Users.AnyAsync(u => u.Id.ToString().Equals(userId, StringComparison.InvariantCultureIgnoreCase));
+            if (!userExists)
             {
-                throw new RpcException(new Status(StatusCode.NotFound, "Game not found"));
+                throw new RpcException(new Status(StatusCode.NotFound, "User not found"));
             }
 
-            // Verify user is a player in the game
-            var isPlayer = await _context.PlayerSessions
-                .AnyAsync(ps => ps.GameId.ToString() == request.GameId && ps.UserId.ToString() == userId);
-            
-            if (!isPlayer)
+            _logger.LogInformation("User {UserId} subscribed to lobby events", userId);
+
+            _subscribers.Add(responseStream);
+
+            await responseStream.WriteAsync(new LobbyEvent
             {
-                throw new RpcException(new Status(StatusCode.PermissionDenied, "You are not a player in this game"));
-            }
-
-            _logger.LogInformation("User {UserId} subscribed to game {GameId}", userId, request.GameId);
-
-            // Add this stream to the subscribers for this game
-            var subscribers = _subscribers.GetOrAdd(request.GameId, _ => new ConcurrentBag<IServerStreamWriter<GameEvent>>());
-            subscribers.Add(responseStream);
-
-            // Send initial connection confirmation event
-            await responseStream.WriteAsync(new GameEvent
-            {
-                GameId = request.GameId,
-                Type = EventType.Error, // Using ERROR as a generic notification type
-                Timestamp = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTime(DateTime.UtcNow),
-                Error = new ErrorEvent
-                {
-                    ErrorCode = "CONNECTED",
-                    Message = "Successfully connected to game event stream"
-                }
+                Type = LobbyEventType.LobbyListChanged,
+                Timestamp = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTime(DateTime.UtcNow)
             });
 
-            // Keep the stream open until client disconnects or cancellation is requested
             while (!context.CancellationToken.IsCancellationRequested)
             {
                 await Task.Delay(1000, context.CancellationToken);
             }
 
-            _logger.LogInformation("User {UserId} unsubscribed from game {GameId}", userId, request.GameId);
+            _logger.LogInformation("User {UserId} unsubscribed from lobby events", userId);
         }
         catch (OperationCanceledException)
         {
-            _logger.LogInformation("Client disconnected from game {GameId}", request.GameId);
+            _logger.LogInformation("Client disconnected from lobby events");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error in Subscribe for game {GameId}", request.GameId);
+            _logger.LogError(ex, "Error in SubscribeLobby");
             throw;
         }
-        finally
+    }
+
+    /// <summary>
+    /// Broadcasts a lobby event to all connected subscribers.
+    /// </summary>
+    public static async Task BroadcastLobbyEventAsync(LobbyEvent lobbyEvent)
+    {
+        if (_subscribers.IsEmpty)
         {
-            // Remove this stream from subscribers when connection closes
-            if (_subscribers.TryGetValue(request.GameId, out var subscribers))
-            {
-                // Note: ConcurrentBag doesn't support removal, so we'll leave it
-                // In production, consider using a different data structure or cleanup mechanism
-            }
+            return;
         }
-    }
 
-    /// <summary>
-    /// Send player action (alternative to REST API)
-    /// </summary>
-    public override Task<ActionResponse> SendAction(PlayerAction request, ServerCallContext context)
-    {
-        // TODO: Implement action handling
-        // For now, we'll keep actions going through the REST API
-        // This method can be implemented later for full bidirectional communication
-        
-        return Task.FromResult(new ActionResponse
+        var tasks = new List<Task>();
+        foreach (var stream in _subscribers)
         {
-            Success = false,
-            ErrorCode = "NOT_IMPLEMENTED",
-            ErrorMessage = "Action handling via gRPC is not yet implemented. Please use REST API endpoints."
-        });
-    }
-
-    /// <summary>
-    /// Heartbeat to keep connection alive
-    /// </summary>
-    public override Task<HeartbeatResponse> Heartbeat(HeartbeatRequest request, ServerCallContext context)
-    {
-        return Task.FromResult(new HeartbeatResponse
-        {
-            ServerTime = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTime(DateTime.UtcNow)
-        });
-    }
-
-    /// <summary>
-    /// Broadcast an event to all subscribers of a game
-    /// </summary>
-    public static async Task BroadcastGameEventAsync(string gameId, GameEvent gameEvent)
-    {
-        if (_subscribers.TryGetValue(gameId, out var subscribers))
-        {
-            var tasks = new List<Task>();
-            
-            foreach (var stream in subscribers)
-            {
-                tasks.Add(stream.WriteAsync(gameEvent));
-            }
-
-            await Task.WhenAll(tasks);
+            tasks.Add(stream.WriteAsync(lobbyEvent));
         }
+
+        await Task.WhenAll(tasks);
     }
 
     /// <summary>
-    /// Validate JWT access token and extract user ID
+    /// Validates a JWT access token and returns the user ID when valid.
     /// </summary>
     private async Task<string?> ValidateAccessTokenAsync(string accessToken)
     {
@@ -189,7 +132,6 @@ public class GameEventsService : GameEvents.GameEventsBase
             };
 
             var principal = await tokenHandler.ValidateTokenAsync(accessToken, validationParameters);
-            
             if (!principal.IsValid)
             {
                 return null;

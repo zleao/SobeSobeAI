@@ -192,6 +192,8 @@ public static class GameEndpoints
 
             await db.SaveChangesAsync();
 
+            await LobbyEventExtensions.BroadcastLobbyListChangedAsync(game.Id.ToString());
+
             // Return game response
             var gameResponse = new GameResponse
             {
@@ -305,6 +307,8 @@ public static class GameEndpoints
                 user.DisplayName,
                 playerSession.Position);
 
+            await LobbyEventExtensions.BroadcastLobbyListChangedAsync(game.Id.ToString());
+
             // Return join response
             var joinResponse = new JoinGameResponse
             {
@@ -396,6 +400,8 @@ public static class GameEndpoints
                     leavingPosition);
             }
 
+            await LobbyEventExtensions.BroadcastLobbyListChangedAsync(game.Id.ToString());
+
             return Results.Ok(new { message = "Left game successfully" });
         })
         .RequireAuthorization()
@@ -436,6 +442,8 @@ public static class GameEndpoints
             // Delete the game (cascading delete will remove player sessions)
             db.Games.Remove(game);
             await db.SaveChangesAsync();
+
+            await LobbyEventExtensions.BroadcastLobbyListChangedAsync(game.Id.ToString());
 
             return Results.Ok(new { message = "Game cancelled successfully" });
         })
@@ -535,6 +543,8 @@ public static class GameEndpoints
                     Position: ps.Position,
                     Points: ps.CurrentPoints
                 )).ToList());
+
+            await LobbyEventExtensions.BroadcastLobbyListChangedAsync(game.Id.ToString());
 
             // Return start game response
             var response = new StartGameResponse

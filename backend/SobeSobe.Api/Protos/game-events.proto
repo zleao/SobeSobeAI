@@ -18,6 +18,31 @@ service GameEvents {
   rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
 }
 
+// Lobby events streaming service
+service LobbyEvents {
+  // Subscribe to lobby events (game list changes)
+  rpc SubscribeLobby(LobbySubscribeRequest) returns (stream LobbyEvent);
+}
+
+// Subscribe to lobby events
+message LobbySubscribeRequest {
+  string access_token = 1;
+}
+
+// Lobby event (server -> client)
+message LobbyEvent {
+  LobbyEventType type = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string game_id = 3;
+}
+
+enum LobbyEventType {
+  LOBBY_LIST_CHANGED = 0;
+  GAME_CREATED = 1;
+  GAME_UPDATED = 2;
+  GAME_REMOVED = 3;
+}
+
 // Subscribe to game events
 message SubscribeRequest {
   string game_id = 1;

@@ -1,3 +1,4 @@
+using Grpc.AspNetCore.Web;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -76,6 +77,20 @@ builder.Services.AddScoped<TrickTakingService>();
 // Add gRPC services
 builder.Services.AddGrpc();
 
+// Allow gRPC-Web from the frontend dev server
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("GrpcWebPolicy", policy =>
+        policy.WithOrigins("http://localhost:4200", "https://localhost:4200")
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .WithExposedHeaders(
+                "Grpc-Status",
+                "Grpc-Message",
+                "Grpc-Encoding",
+                "Grpc-Accept-Encoding"));
+});
+
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -110,11 +125,15 @@ else
     app.UseHttpsRedirection();
 }
 
+app.UseCors("GrpcWebPolicy");
+app.UseGrpcWeb(new GrpcWebOptions { DefaultEnabled = true });
+
 app.UseAuthentication();
 app.UseAuthorization();
 
 // Map gRPC services
-app.MapGrpcService<GameEventsService>();
+app.MapGrpcService<GameEventsService>().EnableGrpcWeb();
+app.MapGrpcService<LobbyEventsService>().EnableGrpcWeb();
 
 app.MapAuthEndpoints();
 app.MapUserEndpoints();

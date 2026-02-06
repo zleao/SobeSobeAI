@@ -1,9 +1,10 @@
-import { Component, OnInit, OnDestroy, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { interval, Subscription, switchMap } from 'rxjs';
 import { Game, GameStateResponse, Card } from '../../services/game';
 import { Auth } from '../../services/auth';
+import * as grpcWeb from 'grpc-web';
+import { GameEvent, GameEventsClient } from '../../services/grpc/game-events';
 
 @Component({
   selector: 'app-game-board',
@@ -21,13 +22,15 @@ export class GameBoard implements OnInit, OnDestroy {
   exchangingCards = signal(false);
   
   private gameId: string = '';
-  private pollSubscription?: Subscription;
+  private gameStream?: grpcWeb.ClientReadableStream<GameEvent>;
+  private isRefreshingToken = false;
 
   constructor(
     private route: ActivatedRoute,
     public router: Router,
     private gameService: Game,
-    public authService: Auth
+    public authService: Auth,
+    private gameEventsClient: GameEventsClient
   ) {}
 
   ngOnInit() {
@@ -40,30 +43,11 @@ export class GameBoard implements OnInit, OnDestroy {
     // Load initial game state
     this.loadGameState();
 
-    // Poll for updates every 2 seconds
-    this.pollSubscription = interval(2000)
-      .pipe(switchMap(() => this.gameService.getGameState(this.gameId)))
-      .subscribe({
-        next: (state) => {
-          this.gameState.set(state);
-          this.loading.set(false);
-          
-          // Navigate away if game is completed
-          if (state.status === 2) { // Completed
-            this.router.navigate(['/lobby']);
-          }
-        },
-        error: (err) => {
-          console.error('Error polling game state:', err);
-          if (err.status === 404) {
-            this.router.navigate(['/lobby']);
-          }
-        },
-      });
+    this.connectGameEvents();
   }
 
   ngOnDestroy() {
-    this.pollSubscription?.unsubscribe();
+    this.gameStream?.cancel();
   }
 
   loadGameState() {
@@ -72,6 +56,10 @@ export class GameBoard implements OnInit, OnDestroy {
       next: (state) => {
         this.gameState.set(state);
         this.loading.set(false);
+
+        if (state.status === 2) {
+          this.router.navigate(['/lobby']);
+        }
       },
       error: (err) => {
         console.error('Error loading game state:', err);
@@ -81,6 +69,52 @@ export class GameBoard implements OnInit, OnDestroy {
           this.router.navigate(['/lobby']);
         }
       },
+    });
+  }
+
+  private connectGameEvents() {
+    const accessToken = this.authService.getAccessToken();
+    if (!accessToken) {
+      this.refreshTokenAndReconnect(() => this.connectGameEvents());
+      return;
+    }
+
+    this.gameStream?.cancel();
+    this.gameStream = this.gameEventsClient.subscribeGame(this.gameId, accessToken);
+
+    this.gameStream.on('data', () => {
+      this.loadGameState();
+    });
+
+    this.gameStream.on('error', (error: grpcWeb.RpcError) => {
+      console.error('Game event stream error:', error);
+      this.handleStreamError(error, () => this.connectGameEvents());
+    });
+  }
+
+  private handleStreamError(error: grpcWeb.RpcError, reconnect: () => void): void {
+    if (error.code !== grpcWeb.StatusCode.UNAUTHENTICATED) {
+      return;
+    }
+
+    this.refreshTokenAndReconnect(reconnect);
+  }
+
+  private refreshTokenAndReconnect(reconnect: () => void): void {
+    if (this.isRefreshingToken) {
+      return;
+    }
+
+    this.isRefreshingToken = true;
+    this.authService.refreshAccessToken().subscribe({
+      next: () => {
+        this.isRefreshingToken = false;
+        reconnect();
+      },
+      error: () => {
+        this.isRefreshingToken = false;
+        this.authService.logout();
+      }
     });
   }
 

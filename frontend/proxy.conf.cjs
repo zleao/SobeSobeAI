@@ -9,5 +9,17 @@ module.exports = {
     secure: false,
     changeOrigin: true,
     logLevel: 'info'
+  },
+  '/sobesobe.game.GameEvents': {
+    target: backendUrl,
+    secure: false,
+    changeOrigin: true,
+    logLevel: 'info'
+  },
+  '/sobesobe.game.LobbyEvents': {
+    target: backendUrl,
+    secure: false,
+    changeOrigin: true,
+    logLevel: 'info'
   }
 };

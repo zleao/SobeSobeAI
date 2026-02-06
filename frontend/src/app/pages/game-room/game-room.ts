@@ -1,10 +1,10 @@
-import { Component, OnInit, OnDestroy, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Game, GameResponse } from '../../services/game';
 import { Auth } from '../../services/auth';
 import { CommonModule } from '@angular/common';
-import { interval, Subscription } from 'rxjs';
-import { switchMap } from 'rxjs/operators';
+import * as grpcWeb from 'grpc-web';
+import { GameEvent, GameEventsClient } from '../../services/grpc/game-events';
 
 @Component({
   selector: 'app-game-room',
@@ -20,14 +20,16 @@ export class GameRoom implements OnInit, OnDestroy {
   startingGame = signal<boolean>(false);
   leavingGame = signal<boolean>(false);
   
-  private pollSubscription?: Subscription;
   private gameId: string = '';
+  private gameStream?: grpcWeb.ClientReadableStream<GameEvent>;
+  private isRefreshingToken = false;
 
   constructor(
     private gameService: Game,
     private authService: Auth,
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
+    private gameEventsClient: GameEventsClient
   ) {}
 
   ngOnInit() {
@@ -42,31 +44,11 @@ export class GameRoom implements OnInit, OnDestroy {
     // Load game details
     this.loadGame();
 
-    // Poll for updates every 2 seconds
-    this.pollSubscription = interval(2000)
-      .pipe(switchMap(() => this.gameService.getGame(this.gameId)))
-      .subscribe({
-        next: (game) => {
-          this.game.set(game);
-          this.checkIfCreator(game);
-          
-          // If game has started, navigate to game board
-          if (game.status === 1) { // InProgress
-            this.router.navigate(['/game-board', game.id]);
-          }
-        },
-        error: (err) => {
-          console.error('Error polling game:', err);
-          // If game not found, navigate back to lobby
-          if (err.status === 404) {
-            this.router.navigate(['/lobby']);
-          }
-        }
-      });
+    this.connectGameEvents();
   }
 
   ngOnDestroy() {
-    this.pollSubscription?.unsubscribe();
+    this.gameStream?.cancel();
   }
 
   private loadGame() {
@@ -78,6 +60,10 @@ export class GameRoom implements OnInit, OnDestroy {
         this.game.set(game);
         this.loading.set(false);
         this.checkIfCreator(game);
+
+        if (game.status === 1) {
+          this.router.navigate(['/game-board', game.id]);
+        }
       },
       error: (err) => {
         console.error('Error loading game:', err);
@@ -95,6 +81,52 @@ export class GameRoom implements OnInit, OnDestroy {
   private checkIfCreator(game: GameResponse) {
     const currentUser = this.authService.currentUser();
     this.isCreator.set(currentUser?.id === game.createdBy);
+  }
+
+  private connectGameEvents() {
+    const accessToken = this.authService.getAccessToken();
+    if (!accessToken) {
+      this.refreshTokenAndReconnect(() => this.connectGameEvents());
+      return;
+    }
+
+    this.gameStream?.cancel();
+    this.gameStream = this.gameEventsClient.subscribeGame(this.gameId, accessToken);
+
+    this.gameStream.on('data', () => {
+      this.loadGame();
+    });
+
+    this.gameStream.on('error', (error: grpcWeb.RpcError) => {
+      console.error('Game event stream error:', error);
+      this.handleStreamError(error, () => this.connectGameEvents());
+    });
+  }
+
+  private handleStreamError(error: grpcWeb.RpcError, reconnect: () => void): void {
+    if (error.code !== grpcWeb.StatusCode.UNAUTHENTICATED) {
+      return;
+    }
+
+    this.refreshTokenAndReconnect(reconnect);
+  }
+
+  private refreshTokenAndReconnect(reconnect: () => void): void {
+    if (this.isRefreshingToken) {
+      return;
+    }
+
+    this.isRefreshingToken = true;
+    this.authService.refreshAccessToken().subscribe({
+      next: () => {
+        this.isRefreshingToken = false;
+        reconnect();
+      },
+      error: () => {
+        this.isRefreshingToken = false;
+        this.authService.logout();
+      }
+    });
   }
 
   startGame() {
