@@ -111,7 +111,7 @@ export interface RoundStateResponse {
   trumpSelectedBeforeDealing: boolean;
   trickValue: number;
   currentTrickNumber: number;
-  status: number; // 0=Dealing, 1=TrumpSelection, 2=PlayerDecisions, 3=CardExchange, 4=Playing, 5=Completed
+  status: RoundStatus; // 0=Dealing, 1=TrumpSelection, 2=PlayerDecisions, 3=CardExchange, 4=Playing, 5=Completed
   tricks: TrickStateResponse[];
   currentTrick: TrickStateResponse | null;
   startedAt: string;
@@ -134,6 +134,8 @@ export interface CardPlayedResponse {
 }
 
 export type GameStatus = 'Waiting' | 'InProgress' | 'Completed' | 'Abandoned' | 0 | 1 | 2 | 3;
+export type RoundStatus = 'Dealing' | 'TrumpSelection' | 'PlayerDecisions' | 'CardExchange' | 'Playing' | 'Completed'
+  | 0 | 1 | 2 | 3 | 4 | 5;
 
 export function getGameStatusValue(status: GameStatus): number {
   if (typeof status === 'number') {
@@ -149,6 +151,29 @@ export function getGameStatusValue(status: GameStatus): number {
       return 2;
     case 'Abandoned':
       return 3;
+    default:
+      return -1;
+  }
+}
+
+export function getRoundStatusValue(status: RoundStatus): number {
+  if (typeof status === 'number') {
+    return status;
+  }
+
+  switch (status) {
+    case 'Dealing':
+      return 0;
+    case 'TrumpSelection':
+      return 1;
+    case 'PlayerDecisions':
+      return 2;
+    case 'CardExchange':
+      return 3;
+    case 'Playing':
+      return 4;
+    case 'Completed':
+      return 5;
     default:
       return -1;
   }

@@ -1,7 +1,7 @@
 import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Game, GameStateResponse, Card, getGameStatusValue } from '../../services/game';
+import { Game, GameStateResponse, Card, RoundStatus, getGameStatusValue, getRoundStatusValue } from '../../services/game';
 import { Auth } from '../../services/auth';
 import { GameRealtime } from '../../services/realtime/game-realtime';
 
@@ -176,6 +176,7 @@ export class GameBoard implements OnInit, OnDestroy {
   selectTrump(suit: string, beforeDealing: boolean) {
     this.gameService.selectTrump(this.gameId, { trumpSuit: suit, selectedBeforeDealing: beforeDealing }).subscribe({
       next: () => {
+        this.applyTrumpSelectionLocalState(suit, beforeDealing);
         this.loadGameState();
       },
       error: (err) => {
@@ -184,6 +185,35 @@ export class GameBoard implements OnInit, OnDestroy {
         setTimeout(() => this.error.set(null), 3000);
       },
     });
+  }
+
+  private applyTrumpSelectionLocalState(suit: string, beforeDealing: boolean): void {
+    const state = this.gameState();
+    if (!state?.currentRound) {
+      return;
+    }
+
+    const trickValue = this.getTrickValue(suit, beforeDealing);
+    const nextStatus: RoundStatus = beforeDealing ? 0 : 2;
+
+    this.gameState.set({
+      ...state,
+      currentRound: {
+        ...state.currentRound,
+        trumpSuit: suit,
+        trumpSelectedBeforeDealing: beforeDealing,
+        trickValue,
+        status: nextStatus,
+      },
+    });
+  }
+
+  private getTrickValue(suit: string, beforeDealing: boolean): number {
+    if (beforeDealing) {
+      return suit === 'Hearts' ? 4 : 2;
+    }
+
+    return suit === 'Hearts' ? 2 : 1;
   }
 
   getCardSymbol(suit: string): string {
@@ -241,7 +271,8 @@ export class GameBoard implements OnInit, OnDestroy {
     }
   }
 
-  getRoundStatusText(status: number): string {
+  getRoundStatusText(status: RoundStatus): string {
+    const statusValue = getRoundStatusValue(status);
     const statusMap: { [key: number]: string } = {
       0: 'Dealing',
       1: 'Trump Selection',
@@ -250,7 +281,11 @@ export class GameBoard implements OnInit, OnDestroy {
       4: 'Playing',
       5: 'Completed',
     };
-    return statusMap[status] || 'Unknown';
+    return statusMap[statusValue] || 'Unknown';
+  }
+
+  isRoundStatus(status: RoundStatus, expected: number): boolean {
+    return getRoundStatusValue(status) === expected;
   }
 
   makePlayDecision(willPlay: boolean) {

@@ -63,7 +63,7 @@
         </div>
 
         <!-- Trump Selection (if needed) -->
-        @if (gameState()!.currentRound && gameState()!.currentRound!.status === 1) {
+        @if (gameState()!.currentRound && isRoundStatus(gameState()!.currentRound!.status, 1)) {
           <div class="bg-white rounded-lg shadow-lg p-6">
             @if (isPartyPlayer()) {
               <h2 class="text-xl font-bold mb-4">Select Trump Suit</h2>
@@ -86,7 +86,7 @@
         }
 
         <!-- Player Decision (opt-in/opt-out) -->
-        @if (gameState()!.currentRound && gameState()!.currentRound!.status === 2) {
+        @if (gameState()!.currentRound && isRoundStatus(gameState()!.currentRound!.status, 2)) {
           <div class="bg-white rounded-lg shadow-lg p-6">
             <h2 class="text-xl font-bold mb-4">Play This Round?</h2>
             <p class="text-gray-600 mb-6">
@@ -121,7 +121,7 @@
         }
 
         <!-- Card Exchange -->
-        @if (gameState()!.currentRound && gameState()!.currentRound!.status === 3 && getMyHand().length > 0) {
+        @if (gameState()!.currentRound && isRoundStatus(gameState()!.currentRound!.status, 3) && getMyHand().length > 0) {
           <div class="bg-white rounded-lg shadow-lg p-6">
             <h2 class="text-xl font-bold mb-4">Card Exchange</h2>
             <p class="text-gray-600 mb-6">
