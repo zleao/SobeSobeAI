@@ -26,7 +26,9 @@ public static class RoundEndpoints
             }
 
             // Find game
-            var game = await db.Games.FirstOrDefaultAsync(g => g.Id == id);
+            var game = await db.Games
+                .Include(g => g.PlayerSessions)
+                .FirstOrDefaultAsync(g => g.Id == id);
 
             if (game == null)
             {
@@ -60,10 +62,65 @@ public static class RoundEndpoints
                 return Results.StatusCode(403); // Forbidden - only party player can select trump
             }
 
-            // Validate trump suit selection rules
-            if (request.SelectedBeforeDealing && request.TrumpSuit != TrumpSuit.Hearts)
+            // Load hands to determine if initial cards were dealt
+            var hands = await db.Hands
+                .Where(h => h.RoundId == currentRound.Id)
+                .ToListAsync();
+
+            var hasInitialCards = hands.Any(h => h.Cards.Count > 0);
+
+            if (request.SelectedBeforeDealing && hasInitialCards)
             {
-                return Results.BadRequest(new { error = "Only Hearts can be selected before dealing" });
+                return Results.BadRequest(new { error = "Initial cards were already dealt" });
+            }
+
+            if (!request.SelectedBeforeDealing && !hasInitialCards)
+            {
+                return Results.BadRequest(new { error = "Initial cards must be dealt before selecting trump" });
+            }
+
+            if (request.SelectedBeforeDealing)
+            {
+                var activePlayers = game.PlayerSessions
+                    .Where(ps => ps.IsActive)
+                    .OrderBy(ps => ps.Position)
+                    .ToList();
+
+                if (activePlayers.Count == 0)
+                {
+                    return Results.BadRequest(new { error = "No active players in game" });
+                }
+
+                var deck = CardDealingService.CreateDeck();
+                CardDealingService.ShuffleDeck(deck);
+
+                var dealerPosition = game.CurrentDealerPosition ?? 0;
+                var playerPositions = activePlayers.Select(p => p.Position).ToList();
+                var dealtCards = CardDealingService.DealCards(deck, playerPositions, dealerPosition, 2);
+
+                foreach (var player in activePlayers)
+                {
+                    var existingHand = hands.FirstOrDefault(h => h.PlayerSessionId == player.Id);
+                    var cards = dealtCards[player.Position];
+                    var cardsJson = JsonSerializer.Serialize(cards);
+
+                    if (existingHand == null)
+                    {
+                        var hand = new Hand
+                        {
+                            RoundId = currentRound.Id,
+                            PlayerSessionId = player.Id,
+                            CardsJson = cardsJson,
+                            InitialCardsJson = cardsJson
+                        };
+                        db.Hands.Add(hand);
+                    }
+                    else
+                    {
+                        existingHand.CardsJson = cardsJson;
+                        existingHand.InitialCardsJson = cardsJson;
+                    }
+                }
             }
 
             // Calculate trick value based on trump suit and timing
@@ -98,17 +155,8 @@ public static class RoundEndpoints
             currentRound.TrumpSelectedBeforeDealing = request.SelectedBeforeDealing;
             currentRound.TrickValue = trickValue;
 
-            // Move to next phase based on trump selection timing
-            if (request.SelectedBeforeDealing)
-            {
-                // If trump was selected before dealing, move to Dealing phase first
-                currentRound.Status = RoundStatus.Dealing;
-            }
-            else
-            {
-                // If trump was selected after 2 cards, move to PlayerDecisions phase
-                currentRound.Status = RoundStatus.PlayerDecisions;
-            }
+            // Move to next phase after trump selection
+            currentRound.Status = RoundStatus.PlayerDecisions;
 
             await db.SaveChangesAsync();
 
@@ -289,20 +337,22 @@ public static class RoundEndpoints
                 return Results.Ok(response);
             }
 
-            var handsAlreadyDealt = hands.Any(h => h.Cards.Count > 0);
-            if (!handsAlreadyDealt)
+            var needsAdditionalCards = hands.Any(h => h.Cards.Count < 5);
+            if (needsAdditionalCards)
             {
                 var deck = CardDealingService.CreateDeck();
                 CardDealingService.ShuffleDeck(deck);
 
                 var dealerPosition = game.CurrentDealerPosition ?? 0;
-                var playingPlayerPositions = hands
-                    .Where(h => h.PlayerSession != null)
+                var handsNeedingCards = hands
+                    .Where(h => h.PlayerSession != null && h.Cards.Count < 5)
+                    .ToList();
+                var playingPlayerPositions = handsNeedingCards
                     .Select(h => h.PlayerSession!.Position)
                     .ToList();
                 var dealtCards = CardDealingService.DealCards(deck, playingPlayerPositions, dealerPosition, 3);
 
-                foreach (var hand in hands)
+                foreach (var hand in handsNeedingCards)
                 {
                     if (hand.PlayerSession == null)
                     {
@@ -330,7 +380,7 @@ public static class RoundEndpoints
         .WithName("PlayDecision");
 
         // Deal Cards endpoint (requires authentication, handles automatic dealing based on phase)
-        app.MapPost("/api/games/{id:guid}/rounds/current/deal-cards", async (Guid id, HttpContext httpContext, ApplicationDbContext db) =>
+        app.MapPost("/api/games/{id:guid}/rounds/current/deal-cards", async (Guid id, HttpContext httpContext, ApplicationDbContext db, IGameEventBroadcaster gameEvents) =>
         {
             // Get user ID from JWT claims
             var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
@@ -364,6 +414,13 @@ public static class RoundEndpoints
                 return Results.BadRequest(new { error = "No active round found" });
             }
 
+            // Find player's session
+            var playerSession = game.PlayerSessions.FirstOrDefault(ps => ps.UserId == userId);
+            if (playerSession == null)
+            {
+                return Results.NotFound(new { error = "Player not in this game" });
+            }
+
             // Load hands for current round
             var hands = await db.Hands
                 .Where(h => h.RoundId == currentRound.Id)
@@ -371,7 +428,69 @@ public static class RoundEndpoints
                 .ToListAsync();
 
             // Determine dealing logic based on round status
-            if (currentRound.Status == RoundStatus.Dealing)
+            if (currentRound.Status == RoundStatus.TrumpSelection)
+            {
+                if (playerSession.UserId != currentRound.PartyPlayerUserId)
+                {
+                    return Results.BadRequest(new { error = "Only the party player can deal initial cards" });
+                }
+
+                var initialCardsDealt = hands.Any(h => h.Cards.Count > 0);
+                if (initialCardsDealt)
+                {
+                    return Results.BadRequest(new { error = "Initial cards were already dealt" });
+                }
+
+                var activePlayers = game.PlayerSessions.Where(ps => ps.IsActive).OrderBy(ps => ps.Position).ToList();
+                if (activePlayers.Count == 0)
+                {
+                    return Results.BadRequest(new { error = "No active players in game" });
+                }
+
+                var deck = CardDealingService.CreateDeck();
+                CardDealingService.ShuffleDeck(deck);
+
+                var dealerPosition = game.CurrentDealerPosition ?? 0;
+                var playerPositions = activePlayers.Select(p => p.Position).ToList();
+                var dealtCards = CardDealingService.DealCards(deck, playerPositions, dealerPosition, 2);
+
+                foreach (var player in activePlayers)
+                {
+                    var existingHand = hands.FirstOrDefault(h => h.PlayerSessionId == player.Id);
+                    var cards = dealtCards[player.Position];
+                    var cardsJson = JsonSerializer.Serialize(cards);
+
+                    if (existingHand == null)
+                    {
+                        var hand = new Hand
+                        {
+                            RoundId = currentRound.Id,
+                            PlayerSessionId = player.Id,
+                            CardsJson = cardsJson,
+                            InitialCardsJson = cardsJson
+                        };
+                        db.Hands.Add(hand);
+                    }
+                    else
+                    {
+                        existingHand.CardsJson = cardsJson;
+                        existingHand.InitialCardsJson = cardsJson;
+                    }
+                }
+
+                await db.SaveChangesAsync();
+
+                await gameEvents.BroadcastInitialCardsDealtAsync(game.Id.ToString(), 2, activePlayers.Count);
+
+                return Results.Ok(new
+                {
+                    message = "Dealt initial cards to all players",
+                    roundId = currentRound.Id,
+                    status = currentRound.Status.ToString(),
+                    playersDealt = activePlayers.Count
+                });
+            }
+            else if (currentRound.Status == RoundStatus.Dealing)
             {
                 // Trump selected before dealing - deal 5 cards to all active players
                 var activePlayers = game.PlayerSessions.Where(ps => ps.IsActive).OrderBy(ps => ps.Position).ToList();
@@ -446,11 +565,23 @@ public static class RoundEndpoints
                 CardDealingService.ShuffleDeck(deck);
 
                 var dealerPosition = game.CurrentDealerPosition ?? 0;
-                var playingPlayerPositions = hands.Where(h => h.PlayerSession != null).Select(h => h.PlayerSession!.Position).ToList();
+                var handsNeedingCards = hands.Where(h => h.PlayerSession != null && h.Cards.Count < 5).ToList();
+                if (handsNeedingCards.Count == 0)
+                {
+                    return Results.Ok(new
+                    {
+                        message = "Players already have full hands",
+                        roundId = currentRound.Id,
+                        status = currentRound.Status.ToString(),
+                        playersDealt = 0
+                    });
+                }
+
+                var playingPlayerPositions = handsNeedingCards.Select(h => h.PlayerSession!.Position).ToList();
                 var dealtCards = CardDealingService.DealCards(deck, playingPlayerPositions, dealerPosition, 3);
 
                 // Add 3 cards to each existing hand
-                foreach (var hand in hands)
+                foreach (var hand in handsNeedingCards)
                 {
                     if (hand.PlayerSession == null) continue;
 
@@ -475,7 +606,7 @@ public static class RoundEndpoints
                     message = "Dealt 3 additional cards to players",
                     roundId = currentRound.Id,
                     status = currentRound.Status.ToString(),
-                    playersDealt = hands.Count
+                    playersDealt = handsNeedingCards.Count
                 });
             }
             else

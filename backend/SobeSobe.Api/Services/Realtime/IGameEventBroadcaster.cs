@@ -27,6 +27,11 @@ public interface IGameEventBroadcaster
     Task BroadcastTrumpSelectedAsync(string gameId, string trumpSuit, bool selectedBeforeDealing, int trickValue);
 
     /// <summary>
+    /// Broadcasts an initial cards dealt event to the game group.
+    /// </summary>
+    Task BroadcastInitialCardsDealtAsync(string gameId, int cardsPerPlayer, int playersDealt);
+
+    /// <summary>
     /// Broadcasts a card played event to the game group.
     /// </summary>
     Task BroadcastCardPlayedAsync(string gameId, int position, string rank, string suit, int trickNumber);

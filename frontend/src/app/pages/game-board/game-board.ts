@@ -20,6 +20,7 @@ export class GameBoard implements OnInit, OnDestroy {
   cardsToExchange = signal<Card[]>([]);
   exchangingCards = signal(false);
   endingGame = signal(false);
+  dealingInitialCards = signal(false);
   
   private gameId: string = '';
   private isRefreshingToken = false;
@@ -187,6 +188,28 @@ export class GameBoard implements OnInit, OnDestroy {
     });
   }
 
+  dealInitialCards() {
+    if (this.dealingInitialCards()) {
+      return;
+    }
+
+    this.dealingInitialCards.set(true);
+    this.error.set(null);
+
+    this.gameService.dealInitialCards(this.gameId).subscribe({
+      next: () => {
+        this.dealingInitialCards.set(false);
+        this.loadGameState();
+      },
+      error: (err) => {
+        console.error('Error dealing initial cards:', err);
+        this.error.set(err.error?.error || err.error?.message || 'Failed to deal initial cards');
+        setTimeout(() => this.error.set(null), 3000);
+        this.dealingInitialCards.set(false);
+      },
+    });
+  }
+
   private applyTrumpSelectionLocalState(suit: string, beforeDealing: boolean): void {
     const state = this.gameState();
     if (!state?.currentRound) {
@@ -194,7 +217,7 @@ export class GameBoard implements OnInit, OnDestroy {
     }
 
     const trickValue = this.getTrickValue(suit, beforeDealing);
-    const nextStatus: RoundStatus = beforeDealing ? 0 : 2;
+    const nextStatus: RoundStatus = 2;
 
     this.gameState.set({
       ...state,
@@ -214,6 +237,10 @@ export class GameBoard implements OnInit, OnDestroy {
     }
 
     return suit === 'Hearts' ? 2 : 1;
+  }
+
+  hasInitialCards(): boolean {
+    return this.getMyHand().length > 0;
   }
 
   getCardSymbol(suit: string): string {

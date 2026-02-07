@@ -254,6 +254,10 @@ export class Game {
     return this.http.post<any>(`${this.API_URL}/games/${id}/rounds/current/trump`, request);
   }
 
+  dealInitialCards(id: string): Observable<any> {
+    return this.http.post<any>(`${this.API_URL}/games/${id}/rounds/current/deal-cards`, {});
+  }
+
   playCard(id: string, request: PlayCardRequest): Observable<any> {
     return this.http.post<any>(`${this.API_URL}/games/${id}/rounds/current/play-card`, request);
   }

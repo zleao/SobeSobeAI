@@ -587,4 +587,148 @@ public class GameManagementIntegrationTests : IAsyncLifetime
         // Verify
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
+
+    // Verifies dealing before trump keeps selection and allows normal trump values.
+    [Fact(DisplayName = "Dealing initial cards before trump keeps trump selection and applies normal values")]
+    public async Task DealInitialCards_BeforeTrumpSelection_AllowsNormalTrumpSelection()
+    {
+        var game = await CreateStartedGameAsync();
+        var partyState = await GetGameStateAsync(game.Id, _accessToken1!);
+        var partyUserId = partyState.CurrentRound!.PartyPlayerUserId;
+        var partyToken = GetTokenForUser(partyUserId);
+        var nonPartyUserId = partyUserId == _userId1 ? _userId2 : _userId1;
+        var nonPartyToken = GetTokenForUser(nonPartyUserId);
+
+        var dealRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game.Id}/rounds/current/deal-cards");
+        dealRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", partyToken);
+        var dealResponse = await _client.SendAsync(dealRequest);
+
+        Assert.Equal(HttpStatusCode.OK, dealResponse.StatusCode);
+
+        var partyAfterDeal = await GetGameStateAsync(game.Id, partyToken);
+        Assert.Equal(RoundStatus.TrumpSelection, partyAfterDeal.CurrentRound!.Status);
+        Assert.Equal(2, partyAfterDeal.Players.First(p => p.UserId == partyUserId).Hand?.Count);
+
+        var nonPartyAfterDeal = await GetGameStateAsync(game.Id, nonPartyToken);
+        Assert.Equal(2, nonPartyAfterDeal.Players.First(p => p.UserId == nonPartyUserId).Hand?.Count);
+        Assert.All(nonPartyAfterDeal.Players.Where(p => p.UserId != nonPartyUserId), player => Assert.Null(player.Hand));
+
+        var selectRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game.Id}/rounds/current/trump")
+        {
+            Content = JsonContent.Create(new SelectTrumpRequest
+            {
+                TrumpSuit = TrumpSuit.Diamonds,
+                SelectedBeforeDealing = false
+            })
+        };
+        selectRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", partyToken);
+        var selectResponse = await _client.SendAsync(selectRequest);
+
+        Assert.Equal(HttpStatusCode.OK, selectResponse.StatusCode);
+
+        var finalState = await GetGameStateAsync(game.Id, partyToken);
+        Assert.Equal(RoundStatus.PlayerDecisions, finalState.CurrentRound!.Status);
+        Assert.False(finalState.CurrentRound.TrumpSelectedBeforeDealing);
+        Assert.Equal(TrumpSuit.Diamonds, finalState.CurrentRound.TrumpSuit);
+        Assert.Equal(1, finalState.CurrentRound.TrickValue);
+    }
+
+    // Verifies blind trump auto-deals initial cards and doubles trick values.
+    [Fact(DisplayName = "Blind trump selection auto-deals initial cards and doubles trick values")]
+    public async Task SelectTrump_Blind_AutoDealsInitialCards()
+    {
+        var game = await CreateStartedGameAsync();
+        var partyState = await GetGameStateAsync(game.Id, _accessToken1!);
+        var partyUserId = partyState.CurrentRound!.PartyPlayerUserId;
+        var partyToken = GetTokenForUser(partyUserId);
+        var nonPartyUserId = partyUserId == _userId1 ? _userId2 : _userId1;
+        var nonPartyToken = GetTokenForUser(nonPartyUserId);
+
+        var selectRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game.Id}/rounds/current/trump")
+        {
+            Content = JsonContent.Create(new SelectTrumpRequest
+            {
+                TrumpSuit = TrumpSuit.Spades,
+                SelectedBeforeDealing = true
+            })
+        };
+        selectRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", partyToken);
+        var selectResponse = await _client.SendAsync(selectRequest);
+
+        Assert.Equal(HttpStatusCode.OK, selectResponse.StatusCode);
+
+        var partyAfterSelect = await GetGameStateAsync(game.Id, partyToken);
+        Assert.Equal(RoundStatus.PlayerDecisions, partyAfterSelect.CurrentRound!.Status);
+        Assert.True(partyAfterSelect.CurrentRound.TrumpSelectedBeforeDealing);
+        Assert.Equal(TrumpSuit.Spades, partyAfterSelect.CurrentRound.TrumpSuit);
+        Assert.Equal(2, partyAfterSelect.CurrentRound.TrickValue);
+        Assert.Equal(2, partyAfterSelect.Players.First(p => p.UserId == partyUserId).Hand?.Count);
+
+        var nonPartyAfterSelect = await GetGameStateAsync(game.Id, nonPartyToken);
+        Assert.Equal(2, nonPartyAfterSelect.Players.First(p => p.UserId == nonPartyUserId).Hand?.Count);
+        Assert.All(nonPartyAfterSelect.Players.Where(p => p.UserId != nonPartyUserId), player => Assert.Null(player.Hand));
+    }
+
+    // Creates a game with two players and starts it.
+    private async Task<GameResponse> CreateStartedGameAsync()
+    {
+        var createRequest = new HttpRequestMessage(HttpMethod.Post, "/api/games")
+        {
+            Content = JsonContent.Create(new CreateGameRequest { MaxPlayers = 5 })
+        };
+        createRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
+        var createResponse = await _client.SendAsync(createRequest);
+        var game = await createResponse.Content.ReadFromJsonAsync<GameResponse>(JsonOptions);
+
+        Assert.NotNull(game);
+
+        var joinRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game!.Id}/join");
+        joinRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken2);
+        await _client.SendAsync(joinRequest);
+
+        var startRequest = new HttpRequestMessage(HttpMethod.Post, $"/api/games/{game.Id}/start");
+        startRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken1);
+        var startResponse = await _client.SendAsync(startRequest);
+
+        Assert.Equal(HttpStatusCode.OK, startResponse.StatusCode);
+
+        return game;
+    }
+
+    // Returns the access token for a known test user.
+    private string GetTokenForUser(Guid userId)
+    {
+        if (userId == _userId1)
+        {
+            return _accessToken1!;
+        }
+
+        if (userId == _userId2)
+        {
+            return _accessToken2!;
+        }
+
+        if (userId == _userId3)
+        {
+            return _accessToken3!;
+        }
+
+        throw new InvalidOperationException("Unknown user.");
+    }
+
+    // Retrieves the game state for a specific user token.
+    private async Task<GameStateResponse> GetGameStateAsync(Guid gameId, string accessToken)
+    {
+        var stateRequest = new HttpRequestMessage(HttpMethod.Get, $"/api/games/{gameId}/state");
+        stateRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        var stateResponse = await _client.SendAsync(stateRequest);
+
+        Assert.Equal(HttpStatusCode.OK, stateResponse.StatusCode);
+
+        var state = await stateResponse.Content.ReadFromJsonAsync<GameStateResponse>(JsonOptions);
+
+        Assert.NotNull(state);
+
+        return state!;
+    }
 }

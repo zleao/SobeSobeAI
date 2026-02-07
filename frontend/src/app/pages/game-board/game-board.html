@@ -67,10 +67,28 @@
           <div class="bg-white rounded-lg shadow-lg p-6">
             @if (isPartyPlayer()) {
               <h2 class="text-xl font-bold mb-4">Select Trump Suit</h2>
+              @if (!hasInitialCards()) {
+                <p class="text-gray-600 mb-4">Choose the trump now (blind, double points) or deal the initial cards first.</p>
+                <div class="flex justify-center mb-6">
+                  <button
+                    (click)="dealInitialCards()"
+                    [disabled]="dealingInitialCards()"
+                    class="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
+                  >
+                    @if (dealingInitialCards()) {
+                      <span>Dealing...</span>
+                    } @else {
+                      <span>Deal Initial Cards</span>
+                    }
+                  </button>
+                </div>
+              } @else {
+                <p class="text-gray-600 mb-4">Initial cards dealt. Choose the trump suit.</p>
+              }
               <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                 @for (suit of ['Hearts', 'Diamonds', 'Clubs', 'Spades']; track suit) {
                   <button
-                    (click)="selectTrump(suit, false)"
+                    (click)="selectTrump(suit, !hasInitialCards())"
                     [class]="'flex items-center justify-center gap-2 px-6 py-8 rounded-lg border-2 hover:border-blue-500 hover:bg-blue-50 transition-colors ' + getCardColor(suit)"
                   >
                     <span class="text-4xl">{{ getCardSymbol(suit) }}</span>
