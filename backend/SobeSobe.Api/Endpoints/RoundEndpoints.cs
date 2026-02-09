@@ -182,7 +182,7 @@ public static class RoundEndpoints
         .WithName("SelectTrump");
 
         // Player Decision endpoint (requires authentication, PlayerDecisions phase)
-        app.MapPost("/api/games/{id:guid}/rounds/current/play-decision", async (Guid id, PlayDecisionRequest request, HttpContext httpContext, ApplicationDbContext db) =>
+        app.MapPost("/api/games/{id:guid}/rounds/current/play-decision", async (Guid id, PlayDecisionRequest request, HttpContext httpContext, ApplicationDbContext db, IGameEventBroadcaster gameEvents) =>
         {
             // Get user ID from JWT claims
             var userIdClaim = httpContext.User.FindFirst(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
@@ -296,6 +296,8 @@ public static class RoundEndpoints
             }
 
             await db.SaveChangesAsync();
+
+            await gameEvents.BroadcastPlayerDecisionAsync(game.Id.ToString(), playerSession.Position, request.WillPlay);
 
             // Return response
             var response = new PlayDecisionResponse

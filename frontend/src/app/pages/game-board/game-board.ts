@@ -1,7 +1,7 @@
 import { Component, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Game, GameStateResponse, Card, RoundStatus, getGameStatusValue, getRoundStatusValue } from '../../services/game';
+import { Game, GameStateResponse, Card, RoundStatus, PlayerStateResponse, getGameStatusValue, getRoundStatusValue } from '../../services/game';
 import { Auth } from '../../services/auth';
 import { GameRealtime } from '../../services/realtime/game-realtime';
 
@@ -397,6 +397,49 @@ export class GameBoard implements OnInit, OnDestroy {
     }
 
     return myPlayer.lastDecisionRoundNumber === state.currentRound.roundNumber;
+  }
+
+  getDecisionStatus(player: PlayerStateResponse): 'pending' | 'playing' | 'out' {
+    const state = this.gameState();
+    if (!state?.currentRound) {
+      return 'pending';
+    }
+
+    if (player.lastDecisionRoundNumber !== state.currentRound.roundNumber) {
+      return 'pending';
+    }
+
+    if (player.willPlayCurrentRound === true) {
+      return 'playing';
+    }
+
+    if (player.willPlayCurrentRound === false) {
+      return 'out';
+    }
+
+    return 'pending';
+  }
+
+  getDecisionStatusLabel(player: PlayerStateResponse): string {
+    switch (this.getDecisionStatus(player)) {
+      case 'playing':
+        return 'Playing';
+      case 'out':
+        return 'Sitting out';
+      default:
+        return 'Pending';
+    }
+  }
+
+  getDecisionStatusClass(player: PlayerStateResponse): string {
+    switch (this.getDecisionStatus(player)) {
+      case 'playing':
+        return 'text-green-600';
+      case 'out':
+        return 'text-red-600';
+      default:
+        return 'text-gray-500';
+    }
   }
 
   isPartyPlayer(): boolean {

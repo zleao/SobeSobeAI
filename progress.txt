@@ -69,3 +69,24 @@
 
 ### Learnings
 - Auto-submitting forced decisions avoids blocking the round while hiding the opt-in UI.
+
+## 2026-02-09 - Issue #23: Game Flow further improvement
+
+### What was implemented
+- Added per-player play decision status to the game state for the waiting view.
+- Broadcasted play decision events over SignalR to refresh decision updates live.
+- Updated the waiting screen to list each player's decision status.
+- Ran `dotnet build` and `dotnet test` for the backend.
+
+### Files changed
+- Modified: backend/SobeSobe.Api/DTOs/GameStateResponse.cs
+- Modified: backend/SobeSobe.Api/Endpoints/GameStateEndpoints.cs
+- Modified: backend/SobeSobe.Api/Endpoints/RoundEndpoints.cs
+- Modified: backend/SobeSobe.Api/Services/Realtime/IGameEventBroadcaster.cs
+- Modified: backend/SobeSobe.Api/Services/Realtime/SignalRGameEventBroadcaster.cs
+- Modified: frontend/src/app/services/game.ts
+- Modified: frontend/src/app/pages/game-board/game-board.ts
+- Modified: frontend/src/app/pages/game-board/game-board.html
+
+### Learnings
+- Emitting a decision event keeps the waiting UI synced without extra polling.

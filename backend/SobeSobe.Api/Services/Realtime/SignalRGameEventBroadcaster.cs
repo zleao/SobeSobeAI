@@ -82,6 +82,14 @@ public sealed class SignalRGameEventBroadcaster : IGameEventBroadcaster
     }
 
     /// <inheritdoc />
+    public Task BroadcastPlayerDecisionAsync(string gameId, int position, bool willPlay)
+    {
+        return _hubContext.Clients.Group(gameId).SendAsync(
+            "GameEvent",
+            new RealtimeEvent("PLAYER_DECISION", new { position, willPlay }));
+    }
+
+    /// <inheritdoc />
     public Task BroadcastTrickCompletedAsync(string gameId, int trickNumber, int winnerPosition,
         List<(int Position, string Rank, string Suit)> cardsPlayed)
     {

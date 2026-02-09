@@ -62,6 +62,7 @@ public static class GameStateEndpoints
                     IsActive = ps.IsActive,
                     ConsecutiveRoundsOut = ps.ConsecutiveRoundsOut,
                     LastDecisionRoundNumber = ps.LastDecisionRoundNumber,
+                    WillPlayCurrentRound = null,
                     JoinedAt = ps.JoinedAt,
                     LeftAt = ps.LeftAt,
                     Hand = null // Will be populated below for requesting player
@@ -117,6 +118,15 @@ public static class GameStateEndpoints
                     Tricks = tricks,
                     CurrentTrick = currentTrick
                 };
+
+                foreach (var playerState in playerStates)
+                {
+                    if (playerState.LastDecisionRoundNumber == currentRound.RoundNumber)
+                    {
+                        playerState.WillPlayCurrentRound = currentRound.Hands
+                            .Any(h => h.PlayerSessionId == playerState.Id);
+                    }
+                }
 
                 // Populate requesting player's hand
                 var requestingPlayerHand = currentRound.Hands

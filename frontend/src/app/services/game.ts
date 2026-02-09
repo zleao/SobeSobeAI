@@ -98,6 +98,7 @@ export interface PlayerStateResponse {
   isActive: boolean;
   consecutiveRoundsOut: number;
   lastDecisionRoundNumber?: number | null;
+  willPlayCurrentRound?: boolean | null;
   joinedAt: string;
   leftAt: string | null;
   hand?: Card[] | null;

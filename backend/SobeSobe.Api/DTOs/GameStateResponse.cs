@@ -32,6 +32,7 @@ public class PlayerStateResponse
     public bool IsActive { get; set; }
     public int ConsecutiveRoundsOut { get; set; }
     public int? LastDecisionRoundNumber { get; set; }
+    public bool? WillPlayCurrentRound { get; set; }
     public DateTime JoinedAt { get; set; }
     public DateTime? LeftAt { get; set; }
     public List<Card>? Hand { get; set; } // Only populated for requesting player

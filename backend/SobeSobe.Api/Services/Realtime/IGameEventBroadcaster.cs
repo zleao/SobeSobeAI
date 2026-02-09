@@ -37,6 +37,11 @@ public interface IGameEventBroadcaster
     Task BroadcastCardPlayedAsync(string gameId, int position, string rank, string suit, int trickNumber);
 
     /// <summary>
+    /// Broadcasts a player decision event to the game group.
+    /// </summary>
+    Task BroadcastPlayerDecisionAsync(string gameId, int position, bool willPlay);
+
+    /// <summary>
     /// Broadcasts a trick completed event to the game group.
     /// </summary>
     Task BroadcastTrickCompletedAsync(string gameId, int trickNumber, int winnerPosition,
