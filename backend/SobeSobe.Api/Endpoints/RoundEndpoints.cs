@@ -91,12 +91,13 @@ public static class RoundEndpoints
                     return Results.BadRequest(new { error = "No active players in game" });
                 }
 
-                var deck = CardDealingService.CreateDeck();
-                CardDealingService.ShuffleDeck(deck);
+                var knownCards = hands.SelectMany(h => h.Cards).ToList();
+                var deck = EnsureRoundDeck(currentRound, knownCards);
 
                 var dealerPosition = game.CurrentDealerPosition ?? 0;
                 var playerPositions = activePlayers.Select(p => p.Position).ToList();
                 var dealtCards = CardDealingService.DealCards(deck, playerPositions, dealerPosition, 2);
+                currentRound.Deck = deck;
 
                 foreach (var player in activePlayers)
                 {
@@ -336,8 +337,8 @@ public static class RoundEndpoints
             var needsAdditionalCards = hands.Any(h => h.Cards.Count < 5);
             if (needsAdditionalCards)
             {
-                var deck = CardDealingService.CreateDeck();
-                CardDealingService.ShuffleDeck(deck);
+                var knownCards = hands.SelectMany(h => h.Cards).ToList();
+                var deck = EnsureRoundDeck(currentRound, knownCards);
 
                 var dealerPosition = game.CurrentDealerPosition ?? 0;
                 var handsNeedingCards = hands
@@ -347,6 +348,7 @@ public static class RoundEndpoints
                     .Select(h => h.PlayerSession!.Position)
                     .ToList();
                 var dealtCards = CardDealingService.DealCards(deck, playingPlayerPositions, dealerPosition, 3);
+                currentRound.Deck = deck;
 
                 foreach (var hand in handsNeedingCards)
                 {
@@ -443,12 +445,13 @@ public static class RoundEndpoints
                     return Results.BadRequest(new { error = "No active players in game" });
                 }
 
-                var deck = CardDealingService.CreateDeck();
-                CardDealingService.ShuffleDeck(deck);
+                var knownCards = hands.SelectMany(h => h.Cards).ToList();
+                var deck = EnsureRoundDeck(currentRound, knownCards);
 
                 var dealerPosition = game.CurrentDealerPosition ?? 0;
                 var playerPositions = activePlayers.Select(p => p.Position).ToList();
                 var dealtCards = CardDealingService.DealCards(deck, playerPositions, dealerPosition, 2);
+                currentRound.Deck = deck;
 
                 foreach (var player in activePlayers)
                 {
@@ -496,14 +499,14 @@ public static class RoundEndpoints
                     return Results.BadRequest(new { error = "No active players in game" });
                 }
 
-                // Create deck and shuffle
-                var deck = CardDealingService.CreateDeck();
-                CardDealingService.ShuffleDeck(deck);
+                var knownCards = hands.SelectMany(h => h.Cards).ToList();
+                var deck = EnsureRoundDeck(currentRound, knownCards);
 
                 // Deal 5 cards to each active player
                 var dealerPosition = game.CurrentDealerPosition ?? 0;
                 var playerPositions = activePlayers.Select(p => p.Position).ToList();
                 var dealtCards = CardDealingService.DealCards(deck, playerPositions, dealerPosition, 5);
+                currentRound.Deck = deck;
 
                 // Create hands for all active players
                 foreach (var player in activePlayers)
@@ -557,8 +560,8 @@ public static class RoundEndpoints
                 // Note: In real implementation, 2 cards should have been dealt already
                 // For now, we'll deal 3 more cards to complete the 5-card hands
 
-                var deck = CardDealingService.CreateDeck();
-                CardDealingService.ShuffleDeck(deck);
+                var knownCards = hands.SelectMany(h => h.Cards).ToList();
+                var deck = EnsureRoundDeck(currentRound, knownCards);
 
                 var dealerPosition = game.CurrentDealerPosition ?? 0;
                 var handsNeedingCards = hands.Where(h => h.PlayerSession != null && h.Cards.Count < 5).ToList();
@@ -575,6 +578,7 @@ public static class RoundEndpoints
 
                 var playingPlayerPositions = handsNeedingCards.Select(h => h.PlayerSession!.Position).ToList();
                 var dealtCards = CardDealingService.DealCards(deck, playingPlayerPositions, dealerPosition, 3);
+                currentRound.Deck = deck;
 
                 // Add 3 cards to each existing hand
                 foreach (var hand in handsNeedingCards)
@@ -717,29 +721,19 @@ public static class RoundEndpoints
                 currentCards.Remove(cardToRemove);
             }
 
-            // Create new deck for drawing replacement cards (exclude cards still in play)
-            var deck = CardDealingService.CreateDeck();
+            var knownCards = currentRound.Hands.SelectMany(h => h.Cards).ToList();
+            var deck = EnsureRoundDeck(currentRound, knownCards);
 
-            // Remove all cards that are currently in any player's hand
-            var allPlayersCards = currentRound.Hands
-                .SelectMany(h => h.Cards)
-                .ToList();
-
-            foreach (var cardInPlay in allPlayersCards)
+            if (deck.Count < request.CardsToExchange.Count)
             {
-                var cardToRemove = deck.FirstOrDefault(c => c.Suit == cardInPlay.Suit && c.Rank == cardInPlay.Rank);
-                if (cardToRemove != null)
-                {
-                    deck.Remove(cardToRemove);
-                }
+                return Results.BadRequest(new { error = "Not enough cards remaining in deck" });
             }
-
-            // Shuffle remaining deck
-            CardDealingService.ShuffleDeck(deck);
 
             // Draw replacement cards
             var newCards = deck.Take(request.CardsToExchange.Count).ToList();
+            deck.RemoveRange(0, request.CardsToExchange.Count);
             currentCards.AddRange(newCards);
+            currentRound.Deck = deck;
 
             // Update hand
             hand.CardsJson = JsonSerializer.Serialize(currentCards);
@@ -1115,5 +1109,29 @@ public static class RoundEndpoints
         .WithName("PlayCard");
 
         return app;
+    }
+
+    private static List<Card> EnsureRoundDeck(Round currentRound, IEnumerable<Card> knownCards)
+    {
+        var existingDeck = currentRound.Deck;
+        if (existingDeck.Count > 0)
+        {
+            return existingDeck;
+        }
+
+        var deck = CardDealingService.CreateDeck();
+
+        foreach (var card in knownCards)
+        {
+            var cardToRemove = deck.FirstOrDefault(c => c.Suit == card.Suit && c.Rank == card.Rank);
+            if (cardToRemove != null)
+            {
+                deck.Remove(cardToRemove);
+            }
+        }
+
+        CardDealingService.ShuffleDeck(deck);
+        currentRound.Deck = deck;
+        return deck;
     }
 }

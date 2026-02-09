@@ -1,6 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json;
 using SobeSobe.Core.Enums;
+using SobeSobe.Core.ValueObjects;
 
 namespace SobeSobe.Core.Entities;
 
@@ -40,6 +42,9 @@ public class Round
 
     public DateTime? CompletedAt { get; set; }
 
+    [Required]
+    public string DeckJson { get; set; } = "[]";
+
     // Navigation properties
     [ForeignKey(nameof(GameId))]
     public Game? Game { get; set; }
@@ -53,4 +58,11 @@ public class Round
     public ICollection<Hand> Hands { get; set; } = new List<Hand>();
     public ICollection<Trick> Tricks { get; set; } = new List<Trick>();
     public ICollection<ScoreHistory> ScoreHistory { get; set; } = new List<ScoreHistory>();
+
+    [NotMapped]
+    public List<Card> Deck
+    {
+        get => JsonSerializer.Deserialize<List<Card>>(DeckJson) ?? new List<Card>();
+        set => DeckJson = JsonSerializer.Serialize(value);
+    }
 }

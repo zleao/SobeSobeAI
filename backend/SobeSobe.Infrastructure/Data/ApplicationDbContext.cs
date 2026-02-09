@@ -90,6 +90,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.Status).IsRequired();
             entity.Property(e => e.TrumpSuit).IsRequired();
             entity.Property(e => e.TrickValue).IsRequired();
+            entity.Property(e => e.DeckJson).HasColumnName("Deck").IsRequired();
 
             // Round -> Dealer (User)
             entity.HasOne(r => r.Dealer)

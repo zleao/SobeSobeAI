@@ -65,18 +65,18 @@ public class CardDealingService
         var dealOrder = GetCounterClockwiseOrder(playerPositions, partyPlayerPosition);
 
         // Deal cards round-robin in counter-clockwise order
-        int deckIndex = 0;
         for (int cardNum = 0; cardNum < cardsPerPlayer; cardNum++)
         {
             foreach (var position in dealOrder)
             {
-                if (deckIndex >= deck.Count)
+                if (deck.Count == 0)
                 {
                     throw new InvalidOperationException("Not enough cards in deck");
                 }
-                
-                hands[position].Add(deck[deckIndex]);
-                deckIndex++;
+
+                var nextCard = deck[0];
+                deck.RemoveAt(0);
+                hands[position].Add(nextCard);
             }
         }
 

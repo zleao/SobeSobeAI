@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SobeSobe.Api.DTOs;
+using SobeSobe.Api.Services;
 using SobeSobe.Api.Services.Realtime;
 using SobeSobe.Core.Entities;
 using SobeSobe.Core.Enums;
@@ -570,6 +571,9 @@ public static class GameEndpoints
             var partyPlayer = sortedPlayers[partyPlayerIndexInSorted];
 
             // Create first round
+            var roundDeck = CardDealingService.CreateDeck();
+            CardDealingService.ShuffleDeck(roundDeck);
+
             var round = new Round
             {
                 GameId = game.Id,
@@ -581,7 +585,8 @@ public static class GameEndpoints
                 TrumpSelectedBeforeDealing = false,
                 TrickValue = 0, // Will be set after trump selection
                 CurrentTrickNumber = 0,
-                StartedAt = DateTime.UtcNow
+                StartedAt = DateTime.UtcNow,
+                Deck = roundDeck
             };
 
             db.Rounds.Add(round);
