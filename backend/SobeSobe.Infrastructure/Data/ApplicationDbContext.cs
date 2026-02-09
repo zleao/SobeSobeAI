@@ -92,12 +92,6 @@ public class ApplicationDbContext : DbContext
             entity.Property(e => e.TrickValue).IsRequired();
             entity.Property(e => e.DeckJson).HasColumnName("Deck").IsRequired();
 
-            // Round -> Dealer (User)
-            entity.HasOne(r => r.Dealer)
-                .WithMany()
-                .HasForeignKey(r => r.DealerUserId)
-                .OnDelete(DeleteBehavior.Restrict);
-
             // Round -> Party Player (User)
             entity.HasOne(r => r.PartyPlayer)
                 .WithMany()

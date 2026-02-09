@@ -18,9 +18,6 @@ public class Round
     public int RoundNumber { get; set; }
 
     [Required]
-    public required Guid DealerUserId { get; set; }
-
-    [Required]
     public required Guid PartyPlayerUserId { get; set; }
 
     [Required]
@@ -48,9 +45,6 @@ public class Round
     // Navigation properties
     [ForeignKey(nameof(GameId))]
     public Game? Game { get; set; }
-
-    [ForeignKey(nameof(DealerUserId))]
-    public User? Dealer { get; set; }
 
     [ForeignKey(nameof(PartyPlayerUserId))]
     public User? PartyPlayer { get; set; }

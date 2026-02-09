@@ -18,7 +18,7 @@ public interface IGameEventBroadcaster
     /// <summary>
     /// Broadcasts a game started event to the game group.
     /// </summary>
-    Task BroadcastGameStartedAsync(string gameId, DateTime startedAt, int dealerPosition,
+    Task BroadcastGameStartedAsync(string gameId, DateTime startedAt,
         List<(string UserId, string Username, string DisplayName, int Position, int Points)> players);
 
     /// <summary>

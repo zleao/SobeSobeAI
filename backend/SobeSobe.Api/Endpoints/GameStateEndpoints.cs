@@ -106,7 +106,6 @@ public static class GameStateEndpoints
                 {
                     Id = currentRound.Id,
                     RoundNumber = currentRound.RoundNumber,
-                    DealerUserId = currentRound.DealerUserId,
                     PartyPlayerUserId = currentRound.PartyPlayerUserId,
                     TrumpSuit = currentRound.Status == RoundStatus.TrumpSelection ? null : currentRound.TrumpSuit,
                     TrumpSelectedBeforeDealing = currentRound.TrumpSelectedBeforeDealing,
@@ -152,7 +151,6 @@ public static class GameStateEndpoints
                 Status = game.Status,
                 MaxPlayers = game.MaxPlayers,
                 CurrentPlayerCount = game.PlayerSessions.Count,
-                CurrentDealerIndex = game.CurrentDealerPosition,
                 CurrentRoundNumber = game.CurrentRoundNumber,
                 CreatedAt = game.CreatedAt,
                 StartedAt = game.StartedAt,

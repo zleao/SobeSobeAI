@@ -94,9 +94,9 @@ public static class RoundEndpoints
                 var knownCards = hands.SelectMany(h => h.Cards).ToList();
                 var deck = EnsureRoundDeck(currentRound, knownCards);
 
-                var dealerPosition = game.CurrentDealerPosition ?? 0;
+                var partyPlayerPosition = activePlayers.First(ps => ps.UserId == currentRound.PartyPlayerUserId).Position;
                 var playerPositions = activePlayers.Select(p => p.Position).ToList();
-                var dealtCards = CardDealingService.DealCards(deck, playerPositions, dealerPosition, 2);
+                var dealtCards = CardDealingService.DealCards(deck, playerPositions, partyPlayerPosition, 2);
                 currentRound.Deck = deck;
 
                 foreach (var player in activePlayers)
@@ -340,14 +340,14 @@ public static class RoundEndpoints
                 var knownCards = hands.SelectMany(h => h.Cards).ToList();
                 var deck = EnsureRoundDeck(currentRound, knownCards);
 
-                var dealerPosition = game.CurrentDealerPosition ?? 0;
                 var handsNeedingCards = hands
                     .Where(h => h.PlayerSession != null && h.Cards.Count < 5)
                     .ToList();
                 var playingPlayerPositions = handsNeedingCards
                     .Select(h => h.PlayerSession!.Position)
                     .ToList();
-                var dealtCards = CardDealingService.DealCards(deck, playingPlayerPositions, dealerPosition, 3);
+                var partyPlayerPosition = game.PlayerSessions.First(ps => ps.UserId == currentRound.PartyPlayerUserId).Position;
+                var dealtCards = CardDealingService.DealCards(deck, playingPlayerPositions, partyPlayerPosition, 3);
                 currentRound.Deck = deck;
 
                 foreach (var hand in handsNeedingCards)
@@ -448,9 +448,9 @@ public static class RoundEndpoints
                 var knownCards = hands.SelectMany(h => h.Cards).ToList();
                 var deck = EnsureRoundDeck(currentRound, knownCards);
 
-                var dealerPosition = game.CurrentDealerPosition ?? 0;
+                var partyPlayerPosition = activePlayers.First(ps => ps.UserId == currentRound.PartyPlayerUserId).Position;
                 var playerPositions = activePlayers.Select(p => p.Position).ToList();
-                var dealtCards = CardDealingService.DealCards(deck, playerPositions, dealerPosition, 2);
+                var dealtCards = CardDealingService.DealCards(deck, playerPositions, partyPlayerPosition, 2);
                 currentRound.Deck = deck;
 
                 foreach (var player in activePlayers)
@@ -503,9 +503,9 @@ public static class RoundEndpoints
                 var deck = EnsureRoundDeck(currentRound, knownCards);
 
                 // Deal 5 cards to each active player
-                var dealerPosition = game.CurrentDealerPosition ?? 0;
+                var partyPlayerPosition = activePlayers.First(ps => ps.UserId == currentRound.PartyPlayerUserId).Position;
                 var playerPositions = activePlayers.Select(p => p.Position).ToList();
-                var dealtCards = CardDealingService.DealCards(deck, playerPositions, dealerPosition, 5);
+                var dealtCards = CardDealingService.DealCards(deck, playerPositions, partyPlayerPosition, 5);
                 currentRound.Deck = deck;
 
                 // Create hands for all active players
@@ -563,7 +563,6 @@ public static class RoundEndpoints
                 var knownCards = hands.SelectMany(h => h.Cards).ToList();
                 var deck = EnsureRoundDeck(currentRound, knownCards);
 
-                var dealerPosition = game.CurrentDealerPosition ?? 0;
                 var handsNeedingCards = hands.Where(h => h.PlayerSession != null && h.Cards.Count < 5).ToList();
                 if (handsNeedingCards.Count == 0)
                 {
@@ -577,7 +576,8 @@ public static class RoundEndpoints
                 }
 
                 var playingPlayerPositions = handsNeedingCards.Select(h => h.PlayerSession!.Position).ToList();
-                var dealtCards = CardDealingService.DealCards(deck, playingPlayerPositions, dealerPosition, 3);
+                var partyPlayerPosition = game.PlayerSessions.First(ps => ps.UserId == currentRound.PartyPlayerUserId).Position;
+                var dealtCards = CardDealingService.DealCards(deck, playingPlayerPositions, partyPlayerPosition, 3);
                 currentRound.Deck = deck;
 
                 // Add 3 cards to each existing hand

@@ -10,7 +10,6 @@ public class GameResponse
     public GameStatus Status { get; set; }
     public int MaxPlayers { get; set; }
     public int CurrentPlayerCount { get; set; }
-    public int? CurrentDealerIndex { get; set; }
     public int CurrentRoundNumber { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? StartedAt { get; set; }

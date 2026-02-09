@@ -35,13 +35,12 @@ public sealed class SignalRGameEventBroadcaster : IGameEventBroadcaster
     }
 
     /// <inheritdoc />
-    public Task BroadcastGameStartedAsync(string gameId, DateTime startedAt, int dealerPosition,
+    public Task BroadcastGameStartedAsync(string gameId, DateTime startedAt,
         List<(string UserId, string Username, string DisplayName, int Position, int Points)> players)
     {
         var payload = new
         {
             startedAt,
-            dealerPosition,
             players = players.Select(p => new
             {
                 p.UserId,

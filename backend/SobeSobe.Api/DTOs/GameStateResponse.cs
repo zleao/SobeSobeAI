@@ -11,7 +11,6 @@ public class GameStateResponse
     public GameStatus Status { get; set; }
     public int MaxPlayers { get; set; }
     public int CurrentPlayerCount { get; set; }
-    public int? CurrentDealerIndex { get; set; }
     public int CurrentRoundNumber { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? StartedAt { get; set; }
@@ -42,7 +41,6 @@ public class RoundStateResponse
 {
     public Guid Id { get; set; }
     public int RoundNumber { get; set; }
-    public Guid DealerUserId { get; set; }
     public Guid PartyPlayerUserId { get; set; }
     public TrumpSuit? TrumpSuit { get; set; }
     public bool TrumpSelectedBeforeDealing { get; set; }

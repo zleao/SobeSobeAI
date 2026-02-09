@@ -45,7 +45,6 @@ export interface GameResponse {
   status: GameStatus;
   maxPlayers: number;
   currentPlayerCount: number;
-  currentDealerIndex: number | null;
   currentRoundNumber: number;
   players: PlayerSessionResponse[];
   createdAt: string;
@@ -78,7 +77,6 @@ export interface GameStateResponse {
   status: GameStatus;
   maxPlayers: number;
   currentPlayerCount: number;
-  currentDealerIndex: number | null;
   currentRoundNumber: number;
   createdAt: string;
   startedAt: string | null;
@@ -107,7 +105,6 @@ export interface PlayerStateResponse {
 export interface RoundStateResponse {
   id: string;
   roundNumber: number;
-  dealerUserId: string;
   partyPlayerUserId: string;
   trumpSuit: string | null;
   trumpSelectedBeforeDealing: boolean;

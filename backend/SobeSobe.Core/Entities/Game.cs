@@ -19,9 +19,6 @@ public class Game
     [Range(2, 5)]
     public int MaxPlayers { get; set; }
 
-    [Range(0, 4)]
-    public int? CurrentDealerPosition { get; set; }
-
     public int CurrentRoundNumber { get; set; } = 0;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

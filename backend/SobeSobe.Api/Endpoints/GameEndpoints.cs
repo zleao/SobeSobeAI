@@ -126,7 +126,6 @@ public static class GameEndpoints
                 Status = game.Status,
                 MaxPlayers = game.MaxPlayers,
                 CurrentPlayerCount = game.PlayerSessions.Count,
-                CurrentDealerIndex = game.CurrentDealerPosition,
                 CurrentRoundNumber = game.CurrentRoundNumber,
                 CreatedAt = game.CreatedAt,
                 StartedAt = game.StartedAt,
@@ -210,7 +209,6 @@ public static class GameEndpoints
                 Status = game.Status,
                 MaxPlayers = game.MaxPlayers,
                 CurrentPlayerCount = 1,
-                CurrentDealerIndex = game.CurrentDealerPosition,
                 CurrentRoundNumber = game.CurrentRoundNumber,
                 CreatedAt = game.CreatedAt,
                 StartedAt = game.StartedAt,
@@ -554,21 +552,9 @@ public static class GameEndpoints
                 return Results.BadRequest(new { error = "Need at least 2 players to start the game" });
             }
 
-            // Select random dealer from active players
+            // Select random party player from active players
             var random = new Random();
-            var dealerIndex = random.Next(activePlayers.Count);
-            var dealer = activePlayers[dealerIndex];
-
-            // Party player is counter-clockwise from dealer (to the right)
-            // Find next position counter-clockwise
-            var dealerPosition = dealer.Position;
-            var partyPlayerPosition = (dealerPosition + 1) % activePlayers.Count;
-
-            // Find party player by position (need to handle cases where positions might not be sequential)
-            var sortedPlayers = activePlayers.OrderBy(p => p.Position).ToList();
-            var dealerIndexInSorted = sortedPlayers.FindIndex(p => p.Position == dealerPosition);
-            var partyPlayerIndexInSorted = (dealerIndexInSorted + 1) % sortedPlayers.Count;
-            var partyPlayer = sortedPlayers[partyPlayerIndexInSorted];
+            var partyPlayer = activePlayers[random.Next(activePlayers.Count)];
 
             // Create first round
             var roundDeck = CardDealingService.CreateDeck();
@@ -578,7 +564,6 @@ public static class GameEndpoints
             {
                 GameId = game.Id,
                 RoundNumber = 1,
-                DealerUserId = dealer.UserId,
                 PartyPlayerUserId = partyPlayer.UserId,
                 Status = RoundStatus.TrumpSelection,
                 TrumpSuit = TrumpSuit.Hearts, // Default, will be selected by party player
@@ -595,15 +580,12 @@ public static class GameEndpoints
             game.Status = GameStatus.InProgress;
             game.StartedAt = DateTime.UtcNow;
             game.CurrentRoundNumber = 1;
-            game.CurrentDealerPosition = dealer.Position;
-
             await db.SaveChangesAsync();
 
             // Broadcast game started event
             await gameEvents.BroadcastGameStartedAsync(
                 game.Id.ToString(),
                 game.StartedAt.Value,
-                dealer.Position,
                 game.PlayerSessions.Select(ps => (
                     UserId: ps.UserId.ToString(),
                     Username: ps.User!.Username,
@@ -620,8 +602,7 @@ public static class GameEndpoints
                 GameId = game.Id,
                 Status = game.Status.ToString(),
                 StartedAt = game.StartedAt.Value,
-                CurrentRoundNumber = game.CurrentRoundNumber,
-                CurrentDealerPosition = game.CurrentDealerPosition.Value
+                CurrentRoundNumber = game.CurrentRoundNumber
             };
 
             return Results.Ok(response);

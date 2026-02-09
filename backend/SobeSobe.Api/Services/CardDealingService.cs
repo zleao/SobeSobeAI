@@ -42,13 +42,13 @@ public class CardDealingService
     /// </summary>
     /// <param name="deck">The deck to deal from</param>
     /// <param name="playerPositions">Player positions in ascending order</param>
-    /// <param name="dealerPosition">Position of the dealer</param>
+    /// <param name="partyPlayerPosition">Position of the party player</param>
     /// <param name="cardsPerPlayer">Number of cards to deal to each player</param>
     /// <returns>Dictionary mapping player position to their dealt cards</returns>
     public static Dictionary<int, List<Card>> DealCards(
         List<Card> deck, 
         List<int> playerPositions, 
-        int dealerPosition, 
+        int partyPlayerPosition, 
         int cardsPerPlayer)
     {
         var hands = new Dictionary<int, List<Card>>();
@@ -59,9 +59,7 @@ public class CardDealingService
             hands[position] = new List<Card>();
         }
 
-        // Sort player positions to start from party player (dealer + 1, counter-clockwise)
         // Party player is the first to receive cards
-        var partyPlayerPosition = GetNextPosition(dealerPosition, playerPositions.Count);
         var dealOrder = GetCounterClockwiseOrder(playerPositions, partyPlayerPosition);
 
         // Deal cards round-robin in counter-clockwise order
@@ -81,14 +79,6 @@ public class CardDealingService
         }
 
         return hands;
-    }
-
-    /// <summary>
-    /// Gets the next position counter-clockwise
-    /// </summary>
-    private static int GetNextPosition(int currentPosition, int totalPositions)
-    {
-        return (currentPosition + 1) % totalPositions;
     }
 
     /// <summary>
