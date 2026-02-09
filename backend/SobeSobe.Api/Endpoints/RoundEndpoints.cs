@@ -1030,6 +1030,38 @@ public static class RoundEndpoints
                 game.Status = GameStatus.Completed;
                 game.CompletedAt = DateTime.UtcNow;
             }
+            else
+            {
+                var activePlayersForNextRound = game.PlayerSessions
+                    .Where(ps => ps.IsActive)
+                    .OrderBy(ps => ps.Position)
+                    .ToList();
+
+                if (activePlayersForNextRound.Count > 0)
+                {
+                    var nextPartyPlayer = GetNextPartyPlayer(activePlayersForNextRound, currentRound.PartyPlayerUserId);
+                    var nextRoundNumber = currentRound.RoundNumber + 1;
+                    var nextRoundDeck = CardDealingService.CreateDeck();
+                    CardDealingService.ShuffleDeck(nextRoundDeck);
+
+                    var nextRound = new Round
+                    {
+                        GameId = game.Id,
+                        RoundNumber = nextRoundNumber,
+                        PartyPlayerUserId = nextPartyPlayer.UserId,
+                        Status = RoundStatus.TrumpSelection,
+                        TrumpSuit = TrumpSuit.Hearts,
+                        TrumpSelectedBeforeDealing = false,
+                        TrickValue = 0,
+                        CurrentTrickNumber = 0,
+                        StartedAt = DateTime.UtcNow,
+                        Deck = nextRoundDeck
+                    };
+
+                    db.Rounds.Add(nextRound);
+                    game.CurrentRoundNumber = nextRoundNumber;
+                }
+            }
 
             await db.SaveChangesAsync();
 
@@ -1133,5 +1165,27 @@ public static class RoundEndpoints
         CardDealingService.ShuffleDeck(deck);
         currentRound.Deck = deck;
         return deck;
+    }
+
+    // Determines the next party player by position order (counter-clockwise).
+    private static PlayerSession GetNextPartyPlayer(IReadOnlyList<PlayerSession> activePlayers, Guid currentPartyUserId)
+    {
+        var currentIndex = -1;
+        for (var index = 0; index < activePlayers.Count; index++)
+        {
+            if (activePlayers[index].UserId == currentPartyUserId)
+            {
+                currentIndex = index;
+                break;
+            }
+        }
+
+        if (currentIndex == -1)
+        {
+            return activePlayers[0];
+        }
+
+        var nextIndex = (currentIndex + 1) % activePlayers.Count;
+        return activePlayers[nextIndex];
     }
 }
