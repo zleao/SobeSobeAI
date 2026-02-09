@@ -25,6 +25,7 @@ export class GameBoard implements OnInit, OnDestroy {
   private gameId: string = '';
   private isRefreshingToken = false;
   private isDestroyed = false;
+  private autoDecisionRoundNumber: number | null = null;
 
   constructor(
     private route: ActivatedRoute,
@@ -58,6 +59,7 @@ export class GameBoard implements OnInit, OnDestroy {
       next: (state) => {
         this.gameState.set(state);
         this.loading.set(false);
+        this.handleAutoPlayDecision();
 
         const status = getGameStatusValue(state.status);
 
@@ -329,6 +331,57 @@ export class GameBoard implements OnInit, OnDestroy {
         this.makingDecision.set(false);
       },
     });
+  }
+
+  private handleAutoPlayDecision(): void {
+    const state = this.gameState();
+    if (!state?.currentRound) {
+      this.autoDecisionRoundNumber = null;
+      return;
+    }
+
+    if (!this.isRoundStatus(state.currentRound.status, 2)) {
+      this.autoDecisionRoundNumber = null;
+      return;
+    }
+
+    if (this.hasMadePlayDecision() || this.makingDecision() || !this.isForcedToPlay()) {
+      return;
+    }
+
+    if (this.autoDecisionRoundNumber === state.currentRound.roundNumber) {
+      return;
+    }
+
+    this.autoDecisionRoundNumber = state.currentRound.roundNumber;
+    this.makePlayDecision(true);
+  }
+
+  isForcedToPlay(): boolean {
+    const state = this.gameState();
+    const currentUser = this.authService.currentUser();
+    if (!state || !currentUser || !state.currentRound) {
+      return false;
+    }
+
+    const myPlayer = state.players.find(p => p.userId === currentUser.id);
+    if (!myPlayer) {
+      return false;
+    }
+
+    if (state.currentRound.partyPlayerUserId === currentUser.id) {
+      return true;
+    }
+
+    if (state.currentRound.trumpSuit === 'Clubs') {
+      return true;
+    }
+
+    if (myPlayer.consecutiveRoundsOut >= 2) {
+      return true;
+    }
+
+    return myPlayer.currentPoints <= 5;
   }
 
   hasMadePlayDecision(): boolean {

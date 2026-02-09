@@ -55,3 +55,17 @@
 
 ### Learnings
 - Dealer participation is now governed solely by the remaining game rules (party player, clubs trump, points, streaks).
+
+## 2026-02-09 - Issue #23: Game Flow further improvement
+
+### What was implemented
+- Added forced-play detection to auto-submit play decisions when required.
+- Updated the decision UI to skip the choice step for forced players and show a waiting state.
+- Ran `dotnet build` and `dotnet test` for the backend.
+
+### Files changed
+- Modified: frontend/src/app/pages/game-board/game-board.ts
+- Modified: frontend/src/app/pages/game-board/game-board.html
+
+### Learnings
+- Auto-submitting forced decisions avoids blocking the round while hiding the opt-in UI.

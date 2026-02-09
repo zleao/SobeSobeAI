@@ -106,10 +106,15 @@
         <!-- Player Decision (opt-in/opt-out) -->
         @if (gameState()!.currentRound && isRoundStatus(gameState()!.currentRound!.status, 2)) {
           <div class="bg-white rounded-lg shadow-lg p-6">
-            @if (hasMadePlayDecision()) {
+            @if (hasMadePlayDecision() || isForcedToPlay()) {
               <h2 class="text-xl font-bold mb-2">Waiting for other players...</h2>
               <p class="text-gray-600">
-                You've submitted your decision for this round. Waiting for everyone to decide.
+                @if (isForcedToPlay() && !hasMadePlayDecision()) {
+                  <span class="block text-orange-600 font-semibold">You must play this round. Submitting your decision automatically.</span>
+                  <span class="block">Waiting for everyone to decide.</span>
+                } @else {
+                  <span class="block">You've submitted your decision for this round. Waiting for everyone to decide.</span>
+                }
               </p>
             } @else {
               <h2 class="text-xl font-bold mb-4">Play This Round?</h2>
