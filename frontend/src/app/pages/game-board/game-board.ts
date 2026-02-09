@@ -354,14 +354,6 @@ export class GameBoard implements OnInit, OnDestroy {
     return state.currentRound.partyPlayerUserId === currentUser.id;
   }
 
-  isDealer(): boolean {
-    const state = this.gameState();
-    const currentUser = this.authService.currentUser();
-    if (!state || !currentUser || !state.currentRound) return false;
-
-    return state.currentRound.dealerUserId === currentUser.id;
-  }
-
   getMyPoints(): number {
     const state = this.gameState();
     const currentUser = this.authService.currentUser();

@@ -236,25 +236,19 @@ public static class RoundEndpoints
                 return Results.BadRequest(new { error = "Party player cannot opt out" });
             }
 
-            // Rule 2: Dealer must always play
-            if (currentRound.DealerUserId == userId && !request.WillPlay)
-            {
-                return Results.BadRequest(new { error = "Dealer cannot opt out" });
-            }
-
-            // Rule 3: If trump is Clubs, all players must play
+            // Rule 2: If trump is Clubs, all players must play
             if (currentRound.TrumpSuit == TrumpSuit.Clubs && !request.WillPlay)
             {
                 return Results.BadRequest(new { error = "Clubs trump forces all players to play" });
             }
 
-            // Rule 4: Cannot sit out more than 2 consecutive rounds
+            // Rule 3: Cannot sit out more than 2 consecutive rounds
             if (!request.WillPlay && playerSession.ConsecutiveRoundsOut >= 2)
             {
                 return Results.BadRequest(new { error = "Cannot sit out more than 2 consecutive rounds" });
             }
 
-            // Rule 5: Players with 5 points or less must play (from game rules)
+            // Rule 4: Players with 5 points or less must play (from game rules)
             if (!request.WillPlay && playerSession.CurrentPoints <= 5)
             {
                 return Results.BadRequest(new { error = "Players with 5 points or less must play" });

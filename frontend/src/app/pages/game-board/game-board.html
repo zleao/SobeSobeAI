@@ -115,7 +115,7 @@
               <h2 class="text-xl font-bold mb-4">Play This Round?</h2>
               <p class="text-gray-600 mb-6">
                 Decide whether you want to participate in this round. 
-                @if (isPartyPlayer() || isDealer()) {
+                @if (isPartyPlayer()) {
                   <span class="text-orange-600 font-semibold">You must play this round.</span>
                 } @else if (gameState()!.currentRound!.trumpSuit === 'Clubs') {
                   <span class="text-orange-600 font-semibold">Clubs trump - all players must play!</span>
@@ -134,7 +134,7 @@
                 </button>
                 <button
                   (click)="makePlayDecision(false)"
-                  [disabled]="makingDecision() || isPartyPlayer() || isDealer() || gameState()!.currentRound!.trumpSuit === 'Clubs'"
+                  [disabled]="makingDecision() || isPartyPlayer() || gameState()!.currentRound!.trumpSuit === 'Clubs'"
                   class="flex items-center justify-center gap-2 px-6 py-4 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed font-semibold"
                 >
                   <span class="text-2xl">✗</span>

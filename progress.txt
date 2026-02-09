@@ -40,3 +40,18 @@
 
 ### Learnings
 - Player decisions can be inferred by matching LastDecisionRoundNumber to the active round.
+
+## 2026-02-09 - Issue #23: Game Flow further improvement
+
+### What was implemented
+- Removed the dealer restriction from player decision rules so dealers can sit out when allowed.
+- Updated the player decision UI to stop treating dealers as forced participants.
+- Ran `dotnet build` and `dotnet test` for the backend.
+
+### Files changed
+- Modified: backend/SobeSobe.Api/Endpoints/RoundEndpoints.cs
+- Modified: frontend/src/app/pages/game-board/game-board.ts
+- Modified: frontend/src/app/pages/game-board/game-board.html
+
+### Learnings
+- Dealer participation is now governed solely by the remaining game rules (party player, clubs trump, points, streaks).
