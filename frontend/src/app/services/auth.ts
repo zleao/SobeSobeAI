@@ -1,7 +1,7 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
-import { Observable, tap } from 'rxjs';
+import { Observable, tap, firstValueFrom } from 'rxjs';
 
 export interface RegisterRequest {
   username: string;
@@ -52,6 +52,7 @@ export class Auth {
   private readonly ACCESS_TOKEN_KEY = 'access_token';
   private readonly REFRESH_TOKEN_KEY = 'refresh_token';
   private readonly USER_KEY = 'user';
+  private refreshInFlight?: Promise<RefreshTokenResponse>;
 
   private currentUserSignal = signal<User | null>(this.loadUserFromStorage());
   
@@ -106,6 +107,33 @@ export class Auth {
     );
   }
 
+  async getValidAccessToken(): Promise<string | null> {
+    const token = this.getAccessToken();
+    if (token && !this.isTokenExpired(token)) {
+      return token;
+    }
+
+    const refreshToken = this.getRefreshToken();
+    if (!refreshToken) {
+      return null;
+    }
+
+    try {
+      if (!this.refreshInFlight) {
+        this.refreshInFlight = firstValueFrom(this.refreshAccessToken());
+      }
+
+      const response = await this.refreshInFlight;
+      return response.accessToken;
+    } catch {
+      this.clearTokens();
+      this.currentUserSignal.set(null);
+      return null;
+    } finally {
+      this.refreshInFlight = undefined;
+    }
+  }
+
   private saveTokens(accessToken: string, refreshToken: string): void {
     localStorage.setItem(this.ACCESS_TOKEN_KEY, accessToken);
     localStorage.setItem(this.REFRESH_TOKEN_KEY, refreshToken);
@@ -115,6 +143,33 @@ export class Auth {
     localStorage.removeItem(this.ACCESS_TOKEN_KEY);
     localStorage.removeItem(this.REFRESH_TOKEN_KEY);
     localStorage.removeItem(this.USER_KEY);
+  }
+
+  private isTokenExpired(token: string): boolean {
+    const payload = this.decodeJwtPayload(token);
+    if (!payload?.exp) {
+      return true;
+    }
+
+    // Allow a small clock skew to reduce edge-case 401s.
+    const skewSeconds = 30;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    return payload.exp <= nowSeconds + skewSeconds;
+  }
+
+  private decodeJwtPayload(token: string): { exp?: number } | null {
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+      return null;
+    }
+
+    try {
+      const payload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const decoded = atob(payload);
+      return JSON.parse(decoded) as { exp?: number };
+    } catch {
+      return null;
+    }
   }
 
   private setCurrentUser(user: User): void {

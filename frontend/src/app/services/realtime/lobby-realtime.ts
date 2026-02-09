@@ -1,6 +1,5 @@
 import { Injectable } from '@angular/core';
 import { HubConnection, HubConnectionBuilder, HubConnectionState, LogLevel } from '@microsoft/signalr';
-import { firstValueFrom } from 'rxjs';
 import { Auth } from '../auth';
 import type { RealtimeEvent } from './game-realtime';
 
@@ -42,7 +41,12 @@ export class LobbyRealtime {
     this.connection.onreconnected(connectionId => {
       console.info('Lobby hub reconnected', connectionId ?? '');
     });
-    this.connection.onclose(error => onClose?.(error ?? undefined));
+    this.connection.onclose(error => {
+      if (this.isUnauthorizedError(error)) {
+        this.authService.logout();
+      }
+      onClose?.(error ?? undefined);
+    });
 
     this.startPromise = this.connection.start();
     try {
@@ -79,16 +83,14 @@ export class LobbyRealtime {
   }
 
   private async getAccessToken(): Promise<string | null> {
-    const token = this.authService.getAccessToken();
-    if (token) {
-      return token;
+    return this.authService.getValidAccessToken();
+  }
+
+  private isUnauthorizedError(error?: Error): boolean {
+    if (!error?.message) {
+      return false;
     }
 
-    try {
-      const response = await firstValueFrom(this.authService.refreshAccessToken());
-      return response.accessToken;
-    } catch {
-      return null;
-    }
+    return /401|unauthorized/i.test(error.message);
   }
 }
