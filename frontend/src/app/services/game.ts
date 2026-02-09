@@ -97,6 +97,7 @@ export interface PlayerStateResponse {
   currentPoints: number;
   isActive: boolean;
   consecutiveRoundsOut: number;
+  lastDecisionRoundNumber?: number | null;
   joinedAt: string;
   leftAt: string | null;
   hand?: Card[] | null;
@@ -107,7 +108,7 @@ export interface RoundStateResponse {
   roundNumber: number;
   dealerUserId: string;
   partyPlayerUserId: string;
-  trumpSuit: string;
+  trumpSuit: string | null;
   trumpSelectedBeforeDealing: boolean;
   trickValue: number;
   currentTrickNumber: number;

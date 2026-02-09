@@ -61,6 +61,7 @@ public static class GameStateEndpoints
                     CurrentPoints = ps.CurrentPoints,
                     IsActive = ps.IsActive,
                     ConsecutiveRoundsOut = ps.ConsecutiveRoundsOut,
+                    LastDecisionRoundNumber = ps.LastDecisionRoundNumber,
                     JoinedAt = ps.JoinedAt,
                     LeftAt = ps.LeftAt,
                     Hand = null // Will be populated below for requesting player
@@ -106,7 +107,7 @@ public static class GameStateEndpoints
                     RoundNumber = currentRound.RoundNumber,
                     DealerUserId = currentRound.DealerUserId,
                     PartyPlayerUserId = currentRound.PartyPlayerUserId,
-                    TrumpSuit = currentRound.TrumpSuit,
+                    TrumpSuit = currentRound.Status == RoundStatus.TrumpSelection ? null : currentRound.TrumpSuit,
                     TrumpSelectedBeforeDealing = currentRound.TrumpSelectedBeforeDealing,
                     TrickValue = currentRound.TrickValue,
                     CurrentTrickNumber = currentRound.CurrentTrickNumber,

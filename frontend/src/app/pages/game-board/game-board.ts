@@ -331,6 +331,21 @@ export class GameBoard implements OnInit, OnDestroy {
     });
   }
 
+  hasMadePlayDecision(): boolean {
+    const state = this.gameState();
+    const currentUser = this.authService.currentUser();
+    if (!state || !currentUser || !state.currentRound) {
+      return false;
+    }
+
+    const myPlayer = state.players.find(p => p.userId === currentUser.id);
+    if (!myPlayer) {
+      return false;
+    }
+
+    return myPlayer.lastDecisionRoundNumber === state.currentRound.roundNumber;
+  }
+
   isPartyPlayer(): boolean {
     const state = this.gameState();
     const currentUser = this.authService.currentUser();

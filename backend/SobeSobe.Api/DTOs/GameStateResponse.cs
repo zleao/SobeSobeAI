@@ -31,6 +31,7 @@ public class PlayerStateResponse
     public int CurrentPoints { get; set; }
     public bool IsActive { get; set; }
     public int ConsecutiveRoundsOut { get; set; }
+    public int? LastDecisionRoundNumber { get; set; }
     public DateTime JoinedAt { get; set; }
     public DateTime? LeftAt { get; set; }
     public List<Card>? Hand { get; set; } // Only populated for requesting player
@@ -42,7 +43,7 @@ public class RoundStateResponse
     public int RoundNumber { get; set; }
     public Guid DealerUserId { get; set; }
     public Guid PartyPlayerUserId { get; set; }
-    public TrumpSuit TrumpSuit { get; set; }
+    public TrumpSuit? TrumpSuit { get; set; }
     public bool TrumpSelectedBeforeDealing { get; set; }
     public int TrickValue { get; set; }
     public int CurrentTrickNumber { get; set; }

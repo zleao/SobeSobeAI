@@ -23,3 +23,20 @@
 - Round status stays in TrumpSelection after the initial deal until a trump is chosen.
 - Blind trump doubles trick values for all suits.
 - Game state only exposes the requesting player's hand, so realtime refresh is needed for card visibility.
+
+## 2026-02-09 - Issue #23: Game Flow further improvement
+
+### What was implemented
+- Added per-player decision tracking to the game state response for the current round.
+- Updated the player decision phase UI to show a waiting screen after a decision is submitted.
+- Ran `dotnet build` and `dotnet test` for the backend.
+
+### Files changed
+- Modified: backend/SobeSobe.Api/DTOs/GameStateResponse.cs
+- Modified: backend/SobeSobe.Api/Endpoints/GameStateEndpoints.cs
+- Modified: frontend/src/app/services/game.ts
+- Modified: frontend/src/app/pages/game-board/game-board.ts
+- Modified: frontend/src/app/pages/game-board/game-board.html
+
+### Learnings
+- Player decisions can be inferred by matching LastDecisionRoundNumber to the active round.
