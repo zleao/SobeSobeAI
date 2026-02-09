@@ -168,7 +168,7 @@
           <div class="bg-white rounded-lg shadow-lg p-6">
             <h2 class="text-xl font-bold mb-4">Card Exchange</h2>
             <p class="text-gray-600 mb-6">
-              Select up to 3 cards to exchange. You cannot exchange the Ace of trump ({{ getCardSymbol(gameState()!.currentRound!.trumpSuit!) }} Ace).
+              Select up to 3 cards to exchange.
               @if (cardsToExchange().length > 0) {
                 <span class="font-semibold text-blue-600">{{ cardsToExchange().length }} card(s) selected</span>
               }
@@ -177,10 +177,10 @@
               @for (card of getMyHand(); track card.suit + card.rank) {
                 <button
                   (click)="toggleCardForExchange(card)"
-                  [disabled]="exchangingCards() || (card.rank === 'Ace' && card.suit === gameState()!.currentRound!.trumpSuit)"
+                  [disabled]="exchangingCards()"
                   [class]="'w-24 h-36 bg-white border-2 rounded-lg shadow-md p-2 flex flex-col items-center justify-center transition-all ' +
                            (isCardSelectedForExchange(card) ? 'border-blue-500 ring-2 ring-blue-500 -translate-y-2' : 'border-gray-300 hover:border-blue-300') +
-                           (exchangingCards() || (card.rank === 'Ace' && card.suit === gameState()!.currentRound!.trumpSuit) ? ' opacity-50 cursor-not-allowed' : ' hover:-translate-y-1 cursor-pointer')"
+                           (exchangingCards() ? ' opacity-50 cursor-not-allowed' : ' hover:-translate-y-1 cursor-pointer')"
                 >
                   <div [class]="'text-4xl ' + getCardColor(card.suit)">
                     {{ getCardSymbol(card.suit) }}

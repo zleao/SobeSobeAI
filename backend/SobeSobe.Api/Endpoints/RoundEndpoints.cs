@@ -698,16 +698,6 @@ public static class RoundEndpoints
                 }
             }
 
-            // Validate not trying to exchange Ace of trump
-            var trumpSuit = currentRound.TrumpSuit.ToString();
-            foreach (var cardToExchange in request.CardsToExchange)
-            {
-                if (cardToExchange.Rank == "Ace" && cardToExchange.Suit == trumpSuit)
-                {
-                    return Results.BadRequest(new { error = "Cannot exchange the Ace of trump" });
-                }
-            }
-
             // If no cards to exchange, return current hand
             if (request.CardsToExchange.Count == 0)
             {
